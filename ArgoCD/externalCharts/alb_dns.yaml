@@ -1,0 +1,57 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: eks-charts-applications
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: alb-controller
+            chart: aws-load-balancer-controller
+            repoURL: https://aws.github.io/eks-charts
+            namespace: kube-system
+            targetRevision: 1.8.3
+            roleName: eks-lb-controller-role
+
+          - name: external-dns
+            chart: external-dns
+            repoURL: https://kubernetes-sigs.github.io/external-dns/
+            namespace: kube-system
+            targetRevision: 1.16.1
+            roleName: eks-external-dns-role
+
+  template:
+    metadata:
+      name: '{{name}}'
+    spec:
+      project: default
+      source:
+        repoURL: '{{repoURL}}'
+        chart: '{{chart}}'
+        targetRevision: '{{targetRevision}}'
+        helm:
+          values: |
+            clusterName: eksdemo-cluster
+            region: us-west-2
+            vpcId: ${VPC_ID}
+            serviceAccount:
+              create: true
+              name: '{{name}}'
+              annotations:
+                eks.amazonaws.com/role-arn: arn:aws:iam::${AWS_ACCOUNT_NUMBER}:role/{{roleName}}
+            cleanupOnDelete: true
+            domainFilters:
+              - saharbittman.com
+            policy: sync
+            sources:
+              - ingress
+              - service
+            txtOwnerId: eksdemo
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true

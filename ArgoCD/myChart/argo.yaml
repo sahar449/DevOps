@@ -1,0 +1,42 @@
+
+# =====================================
+# Flask App
+# =====================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: flask-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/sahar449/DevOps_EndtoEnd.git
+    targetRevision: HEAD
+    path: ArgoCD/myChart/helm_chart
+    helm:
+      releaseName: flask-app
+      values: |
+        app:
+          image:
+            repository: ${ECR_NAME}
+            tag: latest
+        secrets:
+          accountNumber: "${AWS_ACCOUNT_NUMBER}"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=false
+      - PruneLast=true
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

@@ -1,0 +1,128 @@
+name: CI Build & Test
+
+on:
+  workflow_run:
+    workflows: ["Bootstrap Infra"]
+    types:
+      - completed
+
+permissions:
+  id-token: write
+  contents: read
+  security-events: write
+
+env:
+  aws_region: us-west-2
+  repo_name: eksdemo
+  image_tag: ${{ github.sha }}
+
+jobs:
+  trivy-scan:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner - Dockerfile
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: './src'
+          format: 'sarif'
+          output: 'trivy-dockerfile-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0'
+
+      - name: Upload Trivy Dockerfile results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-dockerfile-results.sarif'
+          category: 'dockerfile'
+
+      - name: Run Trivy - table output
+        uses: aquasecurity/trivy-action@master
+        if: always()
+        with:
+          scan-type: 'config'
+          scan-ref: './src'
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0'
+
+  ci:
+    runs-on: ubuntu-latest
+    needs: trivy-scan
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.aws_region }}
+          role-session-name: github-actions
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./src
+          push: true
+          tags: |
+            ${{ secrets.AWS_ACCOUNT_NUMBER }}.dkr.ecr.${{ env.aws_region }}.amazonaws.com/${{ env.repo_name }}:${{ env.image_tag }}
+            ${{ secrets.AWS_ACCOUNT_NUMBER }}.dkr.ecr.${{ env.aws_region }}.amazonaws.com/${{ env.repo_name }}:latest
+
+      - name: Run Trivy vulnerability scanner on Docker image
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: '${{ secrets.AWS_ACCOUNT_NUMBER }}.dkr.ecr.${{ env.aws_region }}.amazonaws.com/${{ env.repo_name }}:${{ env.image_tag }}'
+          format: 'sarif'
+          output: 'trivy-image-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0'
+
+      - name: Upload Trivy image results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-image-results.sarif'
+          category: 'container-image'
+
+      - name: Run Trivy on image - table output
+        uses: aquasecurity/trivy-action@master
+        if: always()
+        with:
+          scan-type: 'image'
+          image-ref: '${{ secrets.AWS_ACCOUNT_NUMBER }}.dkr.ecr.${{ env.aws_region }}.amazonaws.com/${{ env.repo_name }}:${{ env.image_tag }}'
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0'
+
+      - name: Smoke Test
+        run: |
+          echo "⏳ Waiting for app to start..."
+          docker run -d --name test-container -p 5000:5000 \
+            ${{ secrets.AWS_ACCOUNT_NUMBER }}.dkr.ecr.${{ env.aws_region }}.amazonaws.com/${{ env.repo_name }}:${{ env.image_tag }}
+
+          sleep 5
+
+          for i in $(seq 1 50); do
+            RESPONSE=$(curl -s http://localhost:5000/health || true)
+            if [ "$RESPONSE" = "OK" ]; then
+              echo "✅ Smoke test passed."
+              docker rm -f test-container
+              exit 0
+            fi
+            echo "⚠️ Attempt $i failed — got: '$RESPONSE'"
+            sleep 5
+          done
+
+          echo "❌ Smoke test failed."
+          docker rm -f test-container
+          exit 1
+        shell: bash
