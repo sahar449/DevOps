@@ -134,16 +134,8 @@ jobs:
           exit 1
 
   destroy:
-    needs: [deploy]
     runs-on: ubuntu-latest
-    if: >
-      ${{
-        always() &&
-        (
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy') ||
-          needs.deploy.result == 'failure'
-        )
-      }}
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -370,12 +362,7 @@ jobs:
 
   destroy-bootstrap:
     needs: destroy
-    if: >
-      ${{
-        always() &&
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy') &&
-        needs.destroy.result == 'success'
-      }}
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
