@@ -2,7 +2,7 @@ name: CD to EKS
 
 on:
   workflow_run:
-    workflows: ["Bootstrap Infra"]
+    workflows: ["CI Build & Test"]
     types:
       - completed
   workflow_dispatch:
@@ -97,6 +97,7 @@ jobs:
             --query "Vpcs[0].VpcId" --output text)
           export ECR_NAME=${{ secrets.ECR_NAME }}
           export AWS_ACCOUNT_NUMBER=${{ secrets.AWS_ACCOUNT_NUMBER }}
+          envsubst < ArgoCD/externalCharts/alb_dns.yaml | kubectl apply -f -
           envsubst < ArgoCD/externalCharts/infra.yaml | kubectl apply -f -
           envsubst < ArgoCD/myChart/argo.yaml | kubectl apply -f -
           sleep 10
