@@ -98,7 +98,7 @@ jobs:
           export ECR_NAME=${{ secrets.ECR_NAME }}
           export AWS_ACCOUNT_NUMBER=${{ secrets.AWS_ACCOUNT_NUMBER }}
           envsubst < ArgoCD/externalCharts/alb_dns.yaml | kubectl apply -f -
-          envsubst < ArgoCD/externalCharts/infra.yaml | kubectl apply -f -
+          envsubst < ArgoCD/externalCharts/secrets.yaml | kubectl apply -f -
           envsubst < ArgoCD/myChart/argo.yaml | kubectl apply -f -
           sleep 10
           kubectl get applications -n argocd
