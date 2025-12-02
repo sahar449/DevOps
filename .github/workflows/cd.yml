@@ -133,119 +133,176 @@ jobs:
           echo "❌ Smoke test failed - health endpoint did not return 'ok' after 200 attempts"
           exit 1
 
-      destroy:
-      needs: [deploy]
-      runs-on: ubuntu-latest
-      if: always() && needs.deploy.result != 'success'
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v4
+  destroy:
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    if: always() && needs.deploy.result != 'success'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-        - name: Configure AWS
-          uses: aws-actions/configure-aws-credentials@v4
-          with:
-            role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-            aws-region: ${{ env.AWS_REGION }}
-            role-session-name: github-actions
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions
 
-        - name: Update kubeconfig
-          run: |
-            aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
 
-        - name: Cleanup ExternalDNS Records
-          run: |
-            echo "🧹 Cleaning up specific DNS records..."
+      - name: Cleanup ExternalDNS Records
+        run: |
+          echo "🧹 Cleaning up specific DNS records..."
+          
+          DOMAIN="${{ env.DOMAIN }}"
+          
+          HOSTED_ZONE_ID=$(aws route53 list-hosted-zones \
+            --query "HostedZones[?Name=='${DOMAIN}.'].Id" \
+            --output text | cut -d'/' -f3)
+          
+          if [ -z "$HOSTED_ZONE_ID" ]; then
+            echo "⚠️ Hosted Zone not found for domain: ${DOMAIN}"
+            exit 0
+          fi
+          
+          echo "✅ Found Hosted Zone: $HOSTED_ZONE_ID for domain: ${DOMAIN}"
+          
+          SUBDOMAINS_TO_DELETE=(
+            "www.${DOMAIN}."
+            "argocd.${DOMAIN}."
+            "*.${DOMAIN}."
+          )
+          
+          for SUBDOMAIN in "${SUBDOMAINS_TO_DELETE[@]}"; do
+            echo "🔍 Checking: $SUBDOMAIN"
             
-            DOMAIN="${{ env.DOMAIN }}"
+            RECORDS=$(aws route53 list-resource-record-sets \
+              --hosted-zone-id "$HOSTED_ZONE_ID" \
+              --query "ResourceRecordSets[?Name=='${SUBDOMAIN}']" \
+              --output json)
             
-            HOSTED_ZONE_ID=$(aws route53 list-hosted-zones \
-              --query "HostedZones[?Name=='${DOMAIN}.'].Id" \
-              --output text | cut -d'/' -f3)
-            
-            if [ -z "$HOSTED_ZONE_ID" ]; then
-              echo "⚠️ Hosted Zone not found for domain: ${DOMAIN}"
-              exit 0
+            if [ "$(echo "$RECORDS" | jq '. | length')" -eq 0 ]; then
+              echo "  ➤ No records found, skipping..."
+              continue
             fi
             
-            echo "✅ Found Hosted Zone: $HOSTED_ZONE_ID for domain: ${DOMAIN}"
-            
-            SUBDOMAINS_TO_DELETE=(
-              "www.${DOMAIN}."
-              "argocd.${DOMAIN}."
-              "*.${DOMAIN}."
-            )
-            
-            for SUBDOMAIN in "${SUBDOMAINS_TO_DELETE[@]}"; do
-              echo "🔍 Checking: $SUBDOMAIN"
+            echo "$RECORDS" | jq -c '.[]' | while read -r record; do
+              RECORD_TYPE=$(echo "$record" | jq -r '.Type')
               
-              RECORDS=$(aws route53 list-resource-record-sets \
+              echo "  ➤ Deleting $SUBDOMAIN ($RECORD_TYPE)..."
+              
+              CHANGE_BATCH=$(cat <<EOF
+          {
+            "Changes": [{
+              "Action": "DELETE",
+              "ResourceRecordSet": $record
+            }]
+          }
+          EOF
+          )
+              
+              aws route53 change-resource-record-sets \
                 --hosted-zone-id "$HOSTED_ZONE_ID" \
-                --query "ResourceRecordSets[?Name=='${SUBDOMAIN}']" \
-                --output json)
-              
-              if [ "$(echo "$RECORDS" | jq '. | length')" -eq 0 ]; then
-                echo "  ➤ No records found, skipping..."
-                continue
-              fi
-              
-              echo "$RECORDS" | jq -c '.[]' | while read -r record; do
-                RECORD_TYPE=$(echo "$record" | jq -r '.Type')
-                
-                echo "  ➤ Deleting $SUBDOMAIN ($RECORD_TYPE)..."
-                
-                CHANGE_BATCH=$(cat <<EOF
-            {
-              "Changes": [{
-                "Action": "DELETE",
-                "ResourceRecordSet": $record
-              }]
-            }
-            EOF
-            )
-                
-                aws route53 change-resource-record-sets \
-                  --hosted-zone-id "$HOSTED_ZONE_ID" \
-                  --change-batch "$CHANGE_BATCH" \
-                  && echo "    ✅ Deleted" \
-                  || echo "    ⚠️ Failed"
-              done
+                --change-batch "$CHANGE_BATCH" \
+                && echo "    ✅ Deleted" \
+                || echo "    ⚠️ Failed"
             done
-            
-            echo "🎉 DNS cleanup completed!"
+          done
+          
+          echo "🎉 DNS cleanup completed!"
 
-        - name: Destroy Everything
-          run: |
-            echo "🗑️ Deleting ArgoCD ApplicationSets..."
-            kubectl delete applicationsets --all -n argocd --timeout=5m || true
+      - name: Destroy Everything
+        run: |
+          echo "🗑️ Deleting ArgoCD ApplicationSets..."
+          kubectl delete applicationsets --all -n argocd --timeout=5m || true
+          
+          echo "⏳ Waiting 10s..."
+          sleep 10
+          
+          echo "🗑️ Deleting ArgoCD Applications..."
+          kubectl delete applications --all -n argocd --timeout=5m || true
+          
+          echo "⏳ Waiting 30s for applications cleanup..."
+          sleep 30
+          
+          echo "🗑️ Uninstalling ArgoCD via Helm..."
+          helm uninstall argocd -n argocd --wait --timeout=10m || true
+          
+          echo "⏳ Waiting 60s for LoadBalancer deletion..."
+          sleep 60
+          
+          echo "🔍 Verifying ArgoCD CLB deletion..."
+          
+          CLB_ARN=$(aws elbv2 describe-load-balancers \
+            --query "LoadBalancers[?LoadBalancerName=='${{ env.ARGOCD_CLB }}'].LoadBalancerArn" \
+            --output text)
+
+          if [ -z "$CLB_ARN" ] || [ "$CLB_ARN" = "None" ]; then
+            echo "✅ ArgoCD CLB successfully deleted"
+          else
+            echo "⚠️ Found orphaned CLB: $CLB_ARN - cleaning up..."
             
-            echo "⏳ Waiting 10s..."
-            sleep 10
-            
-            echo "🗑️ Deleting ArgoCD Applications..."
-            kubectl delete applications --all -n argocd --timeout=5m || true
-            
-            echo "⏳ Waiting 30s for applications cleanup..."
-            sleep 30
-            
-            echo "🗑️ Uninstalling ArgoCD via Helm..."
-            helm uninstall argocd -n argocd --wait --timeout=10m || true
-            
-            echo "⏳ Waiting 60s for LoadBalancer deletion..."
-            sleep 60
-            
-            echo "🔍 Verifying ArgoCD CLB deletion..."
-            
-            CLB_ARN=$(aws elbv2 describe-load-balancers \
-              --query "LoadBalancers[?LoadBalancerName=='${{ env.ARGOCD_CLB }}'].LoadBalancerArn" \
+            LISTENERS=$(aws elbv2 describe-listeners \
+              --load-balancer-arn "$CLB_ARN" \
+              --query "Listeners[].ListenerArn" \
               --output text)
 
-            if [ -z "$CLB_ARN" ] || [ "$CLB_ARN" = "None" ]; then
-              echo "✅ ArgoCD CLB successfully deleted"
-            else
-              echo "⚠️ Found orphaned CLB: $CLB_ARN - cleaning up..."
-              
+            for L in $LISTENERS; do
+              echo "  ➤ Deleting Listener: $L"
+              aws elbv2 delete-listener --listener-arn "$L" || true
+            done
+
+            sleep 5
+            echo "  ➤ Deleting orphaned CLB..."
+            aws elbv2 delete-load-balancer --load-balancer-arn "$CLB_ARN" || true
+            sleep 40
+          fi
+
+          echo "🔍 Checking for orphaned ArgoCD Target Groups..."
+          
+          TG_ARNS=$(aws elbv2 describe-target-groups \
+            --query "TargetGroups[?contains(TargetGroupName, 'argocd')].TargetGroupArn" \
+            --output text)
+
+          if [ -z "$TG_ARNS" ]; then
+            echo "✅ No orphaned Target Groups found"
+          else
+            echo "⚠️ Cleaning orphaned Target Groups..."
+            for TG in $TG_ARNS; do
+              echo "  ➤ Deleting Target Group: $TG"
+              aws elbv2 delete-target-group --target-group-arn "$TG" || true
+            done
+          fi
+
+          echo "🎉 ArgoCD cleanup completed!"
+          
+          echo "🗑️ Deleting argocd namespace..."
+          kubectl delete namespace argocd --timeout=5m || true
+          
+          echo "⏳ Waiting 20s..."
+          sleep 20
+
+          echo "🔍 Getting VPC ID for: ${{ env.VPC_NAME }} ..."
+          VPC_ID=$(aws ec2 describe-vpcs \
+            --filters "Name=tag:Name,Values=${{ env.VPC_NAME }}" \
+            --query "Vpcs[0].VpcId" \
+            --output text)
+
+          if [ "$VPC_ID" = "None" ] || [ -z "$VPC_ID" ]; then
+            echo "⚠️ VPC not found - skipping VPC cleanup"
+          else
+            echo "✅ VPC found: $VPC_ID"
+
+            echo "🧹 Deleting ALB Listeners..."
+            LB_ARNS=$(aws elbv2 describe-load-balancers \
+              --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" \
+              --output text)
+
+            for LB in $LB_ARNS; do
               LISTENERS=$(aws elbv2 describe-listeners \
-                --load-balancer-arn "$CLB_ARN" \
+                --load-balancer-arn "$LB" \
                 --query "Listeners[].ListenerArn" \
                 --output text)
 
@@ -253,180 +310,123 @@ jobs:
                 echo "  ➤ Deleting Listener: $L"
                 aws elbv2 delete-listener --listener-arn "$L" || true
               done
+            done
 
-              sleep 5
-              echo "  ➤ Deleting orphaned CLB..."
-              aws elbv2 delete-load-balancer --load-balancer-arn "$CLB_ARN" || true
-              sleep 40
-            fi
+            sleep 5
 
-            echo "🔍 Checking for orphaned ArgoCD Target Groups..."
-            
+            echo "🧹 Deleting ALBs..."
+            for LB in $LB_ARNS; do
+              echo "  ➤ Deleting Load Balancer: $LB"
+              aws elbv2 delete-load-balancer --load-balancer-arn "$LB" || true
+            done
+
+            echo "⏳ Waiting 60s for ALB deletion..."
+            sleep 60
+
+            echo "🧹 Deleting Target Groups..."
             TG_ARNS=$(aws elbv2 describe-target-groups \
-              --query "TargetGroups[?contains(TargetGroupName, 'argocd')].TargetGroupArn" \
+              --query "TargetGroups[?VpcId=='$VPC_ID'].TargetGroupArn" \
               --output text)
 
-            if [ -z "$TG_ARNS" ]; then
-              echo "✅ No orphaned Target Groups found"
-            else
-              echo "⚠️ Cleaning orphaned Target Groups..."
-              for TG in $TG_ARNS; do
-                echo "  ➤ Deleting Target Group: $TG"
-                aws elbv2 delete-target-group --target-group-arn "$TG" || true
-              done
-            fi
+            for TG in $TG_ARNS; do
+              echo "  ➤ Deleting Target Group: $TG"
+              aws elbv2 delete-target-group --target-group-arn "$TG" || true
+            done
 
-            echo "🎉 ArgoCD cleanup completed!"
-            
-            echo "🗑️ Deleting argocd namespace..."
-            kubectl delete namespace argocd --timeout=5m || true
-            
             echo "⏳ Waiting 20s..."
             sleep 20
 
-            echo "🔍 Getting VPC ID for: ${{ env.VPC_NAME }} ..."
-            VPC_ID=$(aws ec2 describe-vpcs \
-              --filters "Name=tag:Name,Values=${{ env.VPC_NAME }}" \
-              --query "Vpcs[0].VpcId" \
+            echo "🔧 Cleaning Security Groups..."
+            SG_IDS=$(aws ec2 describe-security-groups \
+              --filters "Name=vpc-id,Values=$VPC_ID" \
+              --query "SecurityGroups[?GroupName!='default'].GroupId" \
               --output text)
 
-            if [ "$VPC_ID" = "None" ] || [ -z "$VPC_ID" ]; then
-              echo "⚠️ VPC not found - skipping VPC cleanup"
-            else
-              echo "✅ VPC found: $VPC_ID"
-
-              echo "🧹 Deleting ALB Listeners..."
-              LB_ARNS=$(aws elbv2 describe-load-balancers \
-                --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" \
+            for SG in $SG_IDS; do
+              echo "  ➤ Checking SG: $SG"
+              
+              ENIS=$(aws ec2 describe-network-interfaces \
+                --filters "Name=group-id,Values=$SG" \
+                --query "NetworkInterfaces[].NetworkInterfaceId" \
                 --output text)
 
-              for LB in $LB_ARNS; do
-                LISTENERS=$(aws elbv2 describe-listeners \
-                  --load-balancer-arn "$LB" \
-                  --query "Listeners[].ListenerArn" \
-                  --output text)
-
-                for L in $LISTENERS; do
-                  echo "  ➤ Deleting Listener: $L"
-                  aws elbv2 delete-listener --listener-arn "$L" || true
-                done
+              for ENI in $ENIS; do
+                echo "    - Deleting ENI: $ENI"
+                aws ec2 delete-network-interface --network-interface-id "$ENI" || true
               done
+            done
 
-              sleep 5
+            echo "⏳ Waiting 20s for ENI cleanup..."
+            sleep 20
 
-              echo "🧹 Deleting ALBs..."
-              for LB in $LB_ARNS; do
-                echo "  ➤ Deleting Load Balancer: $LB"
-                aws elbv2 delete-load-balancer --load-balancer-arn "$LB" || true
-              done
+            echo "🧹 Deleting Security Groups (1st attempt)..."
+            for SG in $SG_IDS; do
+              SG_NAME=$(aws ec2 describe-security-groups \
+                --group-ids "$SG" \
+                --query "SecurityGroups[0].GroupName" \
+                --output text 2>/dev/null || echo "")
+              
+              echo "  ➤ Deleting SG: $SG ($SG_NAME)"
+              aws ec2 delete-security-group --group-id "$SG" 2>/dev/null \
+                && echo "    ✔ Deleted" \
+                || echo "    ⚠️ Still in use, will retry..."
+            done
 
-              echo "⏳ Waiting 60s for ALB deletion..."
-              sleep 60
+            echo "⏳ Waiting 30s before retry..."
+            sleep 30
 
-              echo "🧹 Deleting Target Groups..."
-              TG_ARNS=$(aws elbv2 describe-target-groups \
-                --query "TargetGroups[?VpcId=='$VPC_ID'].TargetGroupArn" \
-                --output text)
-
-              for TG in $TG_ARNS; do
-                echo "  ➤ Deleting Target Group: $TG"
-                aws elbv2 delete-target-group --target-group-arn "$TG" || true
-              done
-
-              echo "⏳ Waiting 20s..."
-              sleep 20
-
-              echo "🔧 Cleaning Security Groups..."
-              SG_IDS=$(aws ec2 describe-security-groups \
-                --filters "Name=vpc-id,Values=$VPC_ID" \
-                --query "SecurityGroups[?GroupName!='default'].GroupId" \
-                --output text)
-
-              for SG in $SG_IDS; do
-                echo "  ➤ Checking SG: $SG"
-                
-                ENIS=$(aws ec2 describe-network-interfaces \
-                  --filters "Name=group-id,Values=$SG" \
-                  --query "NetworkInterfaces[].NetworkInterfaceId" \
-                  --output text)
-
-                for ENI in $ENIS; do
-                  echo "    - Deleting ENI: $ENI"
-                  aws ec2 delete-network-interface --network-interface-id "$ENI" || true
-                done
-              done
-
-              echo "⏳ Waiting 20s for ENI cleanup..."
-              sleep 20
-
-              echo "🧹 Deleting Security Groups (1st attempt)..."
-              for SG in $SG_IDS; do
-                SG_NAME=$(aws ec2 describe-security-groups \
-                  --group-ids "$SG" \
-                  --query "SecurityGroups[0].GroupName" \
-                  --output text 2>/dev/null || echo "")
-                
-                echo "  ➤ Deleting SG: $SG ($SG_NAME)"
+            echo "🧹 Deleting Security Groups (2nd attempt)..."
+            for SG in $SG_IDS; do
+              SG_EXISTS=$(aws ec2 describe-security-groups \
+                --group-ids "$SG" \
+                --query "SecurityGroups[0].GroupId" \
+                --output text 2>/dev/null || echo "")
+              
+              if [ -n "$SG_EXISTS" ] && [ "$SG_EXISTS" != "None" ]; then
+                echo "  ➤ Retry deleting SG: $SG"
                 aws ec2 delete-security-group --group-id "$SG" 2>/dev/null \
                   && echo "    ✔ Deleted" \
-                  || echo "    ⚠️ Still in use, will retry..."
-              done
+                  || echo "    ⚠️ Failed - may require manual deletion"
+              fi
+            done
 
-              echo "⏳ Waiting 30s before retry..."
-              sleep 30
+            echo "⏳ Waiting 20s..."
+            sleep 20
 
-              echo "🧹 Deleting Security Groups (2nd attempt)..."
-              for SG in $SG_IDS; do
-                SG_EXISTS=$(aws ec2 describe-security-groups \
-                  --group-ids "$SG" \
-                  --query "SecurityGroups[0].GroupId" \
-                  --output text 2>/dev/null || echo "")
+            echo "🧹 Final Security Groups cleanup (3rd attempt)..."
+            for SG in $SG_IDS; do
+              SG_EXISTS=$(aws ec2 describe-security-groups \
+                --group-ids "$SG" \
+                --query "SecurityGroups[0].GroupId" \
+                --output text 2>/dev/null || echo "")
+              
+              if [ -n "$SG_EXISTS" ] && [ "$SG_EXISTS" != "None" ]; then
+                echo "  ➤ Final attempt for SG: $SG"
                 
-                if [ -n "$SG_EXISTS" ] && [ "$SG_EXISTS" != "None" ]; then
-                  echo "  ➤ Retry deleting SG: $SG"
-                  aws ec2 delete-security-group --group-id "$SG" 2>/dev/null \
-                    && echo "    ✔ Deleted" \
-                    || echo "    ⚠️ Failed - may require manual deletion"
-                fi
-              done
-
-              echo "⏳ Waiting 20s..."
-              sleep 20
-
-              echo "🧹 Final Security Groups cleanup (3rd attempt)..."
-              for SG in $SG_IDS; do
-                SG_EXISTS=$(aws ec2 describe-security-groups \
-                  --group-ids "$SG" \
-                  --query "SecurityGroups[0].GroupId" \
-                  --output text 2>/dev/null || echo "")
+                aws ec2 revoke-security-group-ingress \
+                  --group-id "$SG" \
+                  --ip-permissions "$(aws ec2 describe-security-groups \
+                    --group-ids "$SG" \
+                    --query 'SecurityGroups[0].IpPermissions' \
+                    --output json)" 2>/dev/null || true
                 
-                if [ -n "$SG_EXISTS" ] && [ "$SG_EXISTS" != "None" ]; then
-                  echo "  ➤ Final attempt for SG: $SG"
-                  
-                  aws ec2 revoke-security-group-ingress \
-                    --group-id "$SG" \
-                    --ip-permissions "$(aws ec2 describe-security-groups \
-                      --group-ids "$SG" \
-                      --query 'SecurityGroups[0].IpPermissions' \
-                      --output json)" 2>/dev/null || true
-                  
-                  aws ec2 revoke-security-group-egress \
-                    --group-id "$SG" \
-                    --ip-permissions "$(aws ec2 describe-security-groups \
-                      --group-ids "$SG" \
-                      --query 'SecurityGroups[0].IpPermissionsEgress' \
-                      --output json)" 2>/dev/null || true
-                  
-                  sleep 5
-                  
-                  aws ec2 delete-security-group --group-id "$SG" 2>/dev/null \
-                    && echo "    ✔ Deleted" \
-                    || echo "    ❌ Could not delete - manual intervention required"
-                fi
-              done
-            fi
+                aws ec2 revoke-security-group-egress \
+                  --group-id "$SG" \
+                  --ip-permissions "$(aws ec2 describe-security-groups \
+                    --group-ids "$SG" \
+                    --query 'SecurityGroups[0].IpPermissionsEgress' \
+                    --output json)" 2>/dev/null || true
+                
+                sleep 5
+                
+                aws ec2 delete-security-group --group-id "$SG" 2>/dev/null \
+                  && echo "    ✔ Deleted" \
+                  || echo "    ❌ Could not delete - manual intervention required"
+              fi
+            done
+          fi
 
-            echo "🎉 Full cleanup completed!"
+          echo "🎉 Full cleanup completed!"
 
   destroy-bootstrap:
     needs: destroy
