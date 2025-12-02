@@ -211,209 +211,88 @@ jobs:
         if: github.event.inputs.action == 'destroy' || failure()
         run: |
           
-            echo "🧹 Starting COMPLETE cleanup (ArgoCD + AWS + Helm)..."
-            echo ""
-            
-            # ========================================
-            # PART 1: ArgoCD Resources Cleanup
-            # ========================================
-            
-            echo "📋 Part 1: ArgoCD Resources Cleanup"
-            echo ""
-            
-            # Check what exists
-            echo "Current state:"
-            echo "  Applications: $(kubectl get applications -n argocd --no-headers 2>/dev/null | wc -l)"
-            echo "  ApplicationSets: $(kubectl get applicationset -n argocd --no-headers 2>/dev/null | wc -l)"
-            echo "  Ingress: $(kubectl get ingress -A --no-headers 2>/dev/null | wc -l)"
-            echo "  TargetGroupBindings: $(kubectl get targetgroupbindings -A --no-headers 2>/dev/null | wc -l)"
-            echo ""
-            
-            # Delete Applications
-            echo "🗑️ Step 1: Deleting ArgoCD Applications..."
-            kubectl delete applications --all -n argocd --wait=false 2>/dev/null || echo "No applications found"
-            
-            # Delete ApplicationSets
-            echo "🗑️ Step 2: Deleting ArgoCD ApplicationSets..."
-            kubectl delete applicationset --all -n argocd --wait=false 2>/dev/null || echo "No applicationsets found"
-            
-            # Wait
-            echo "⏳ Waiting 10s for resources to start deleting..."
-            sleep 10
-            
-            # Force cleanup stuck resources
-            echo "🔧 Step 3: Removing finalizers from stuck resources..."
-            
-            kubectl get applications.argoproj.io -n argocd -o name 2>/dev/null | \
-              xargs -r -I {} kubectl patch {} -n argocd -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
-            
-            kubectl get applicationset.argoproj.io -n argocd -o name 2>/dev/null | \
-              xargs -r -I {} kubectl patch {} -n argocd -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
-            
-            kubectl get ingress -A -o name 2>/dev/null | \
-              xargs -r -I {} kubectl patch {} -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
-            
-            kubectl get targetgroupbindings -A -o name 2>/dev/null | \
-              xargs -r -I {} kubectl patch {} -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
-            
-            echo "⏳ Waiting 5s for cleanup to complete..."
-            sleep 5
-            
-            # Verify K8s cleanup
-            echo ""
-            echo "K8s cleanup verification:"
-            echo "  Applications: $(kubectl get applications -n argocd --no-headers 2>/dev/null | wc -l)"
-            echo "  ApplicationSets: $(kubectl get applicationset -n argocd --no-headers 2>/dev/null | wc -l)"
-            echo "  Ingress: $(kubectl get ingress -A --no-headers 2>/dev/null | wc -l)"
-            echo "  TargetGroupBindings: $(kubectl get targetgroupbindings -A --no-headers 2>/dev/null | wc -l)"
-            
-            echo ""
-            echo "✅ ArgoCD resources cleanup completed"
-            echo ""
-            
-            # ========================================
-            # PART 2: Uninstall ArgoCD
-            # ========================================
-            
-            echo "📋 Part 2: Uninstall ArgoCD"
-            echo ""
-            echo "🗑️ Step 4: Uninstalling ArgoCD via Helm..."
-            helm uninstall argocd -n argocd --timeout=2m 2>/dev/null || echo "ArgoCD already uninstalled or not found"
-            
-            echo "✅ ArgoCD uninstalled"
-            echo ""
-            
-            # ========================================
-            # PART 3: AWS Resources Cleanup
-            # ========================================
-            
-            echo "📋 Part 3: AWS Resources Cleanup"
-            echo ""
-            
-            # Step 1: Delete ALB
-            echo "🗑️ Step 5: Deleting ALB..."
-            ALB_ARN=$(aws elbv2 describe-load-balancers \
-              --query "LoadBalancers[?contains(LoadBalancerName, 'eksdemo-flask-alb')].LoadBalancerArn" \
-              --output text 2>/dev/null)
-            
-            if [ -n "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ]; then
-              echo "Found ALB: $ALB_ARN"
-              aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN"
-              echo "✅ ALB deletion initiated, waiting 60s..."
-              sleep 60
-            else
-              echo "✅ No ALB found"
-            fi
-            
-            # Step 2: Delete Target Groups
-            echo ""
-            echo "🗑️ Step 6: Deleting Target Groups..."
-            TG_ARNS=$(aws elbv2 describe-target-groups \
-              --query "TargetGroups[?contains(TargetGroupName, 'k8s-')].TargetGroupArn" \
-              --output text 2>/dev/null)
-            
-            if [ -n "$TG_ARNS" ]; then
-              for TG in $TG_ARNS; do
-                echo "Deleting: $TG"
-                aws elbv2 delete-target-group --target-group-arn "$TG" 2>/dev/null || echo "Failed to delete $TG"
-              done
-              echo "✅ Target Groups deleted, waiting 30s..."
-              sleep 30
-            else
-              echo "✅ No Target Groups found"
-            fi
-            
-            # Step 3: Delete Security Groups
-            echo ""
-            echo "🗑️ Step 7: Deleting Security Groups..."
-            SG_IDS=$(aws ec2 describe-security-groups \
-              --filters "Name=tag:elbv2.k8s.aws/cluster,Values=eksdemo-cluster" \
-              --query "SecurityGroups[*].GroupId" \
-              --output text 2>/dev/null)
-            
-            if [ -n "$SG_IDS" ]; then
-              for SG in $SG_IDS; do
-                echo "Attempting: $SG"
-                for i in {1..5}; do
-                  aws ec2 delete-security-group --group-id "$SG" 2>/dev/null && {
-                    echo "✅ Deleted: $SG"
-                    break
-                  } || {
-                    if [ $i -eq 5 ]; then
-                      echo "⚠️ Failed after 5 attempts: $SG (may have dependencies)"
-                    else
-                      echo "   Retry $i/5 in 10s..."
-                      sleep 10
-                    fi
-                  }
-                done
-              done
-            else
-              echo "✅ No Security Groups found"
-            fi
-            
-            # ========================================
-            # FINAL VERIFICATION
-            # ========================================
-            
-            echo ""
-            echo "=========================================="
-            echo "🔍 FINAL VERIFICATION"
-            echo "=========================================="
-            echo ""
-            
-            # K8s resources
-            echo "📦 Kubernetes Resources:"
-            K8S_APPS=$(kubectl get applications -n argocd --no-headers 2>/dev/null | wc -l)
-            K8S_APPSETS=$(kubectl get applicationset -n argocd --no-headers 2>/dev/null | wc -l)
-            K8S_INGRESS=$(kubectl get ingress -A --no-headers 2>/dev/null | wc -l)
-            K8S_TGB=$(kubectl get targetgroupbindings -A --no-headers 2>/dev/null | wc -l)
-            
-            echo "  Applications: $K8S_APPS"
-            echo "  ApplicationSets: $K8S_APPSETS"
-            echo "  Ingress: $K8S_INGRESS"
-            echo "  TargetGroupBindings: $K8S_TGB"
-            
-            # Check ArgoCD namespace
-            ARGOCD_PODS=$(kubectl get pods -n argocd --no-headers 2>/dev/null | wc -l)
-            echo "  ArgoCD Pods: $ARGOCD_PODS"
-            
-            # AWS resources
-            echo ""
-            echo "☁️ AWS Resources:"
-            ALB_COUNT=$(aws elbv2 describe-load-balancers \
-              --query "LoadBalancers[?contains(LoadBalancerName, 'eksdemo-flask-alb')] | length(@)" \
-              --output text 2>/dev/null || echo "0")
-            TG_COUNT=$(aws elbv2 describe-target-groups \
-              --query "TargetGroups[?contains(TargetGroupName, 'k8s-')] | length(@)" \
-              --output text 2>/dev/null || echo "0")
-            SG_COUNT=$(aws ec2 describe-security-groups \
-              --filters "Name=tag:elbv2.k8s.aws/cluster,Values=eksdemo-cluster" \
-              --query "SecurityGroups | length(@)" \
-              --output text 2>/dev/null || echo "0")
-            
-            echo "  ALBs: $ALB_COUNT"
-            echo "  Target Groups: $TG_COUNT"
-            echo "  Security Groups: $SG_COUNT"
-            
-            echo ""
-            K8S_TOTAL=$((K8S_APPS + K8S_APPSETS + K8S_INGRESS + K8S_TGB + ARGOCD_PODS))
-            AWS_TOTAL=$((ALB_COUNT + TG_COUNT + SG_COUNT))
-            GRAND_TOTAL=$((K8S_TOTAL + AWS_TOTAL))
-            
-            if [ "$GRAND_TOTAL" -eq "0" ]; then
-              echo "✅✅✅ PERFECT! All resources cleaned up successfully! ✅✅✅"
-            else
-              echo "⚠️ $GRAND_TOTAL resource(s) still remaining"
-              echo "   Kubernetes: $K8S_TOTAL"
-              echo "   AWS: $AWS_TOTAL"
-              echo ""
-              echo "You may need to check AWS Console or run: kubectl delete namespace argocd --force"
-            fi
-            
-            echo ""
-            echo "🎉 Complete cleanup script finished!"
-            echo "=========================================="
+             # ========== DESTROY ==========
+      - name: Destroy Everything
+        if: github.event.inputs.action == 'destroy' || failure()
+        run: |
+          VPC_NAME="eksdemo-vpc"
+
+          echo "🔍 Getting VPC ID for: $VPC_NAME ..."
+          VPC_ID=$(aws ec2 describe-vpcs \
+            --filters "Name=tag:Name,Values=$VPC_NAME" \
+            --query "Vpcs[0].VpcId" \
+            --output text)
+
+          if [ "$VPC_ID" = "None" ] || [ -z "$VPC_ID" ]; then
+            echo "❌ VPC not found!"
+            exit 1
+          fi
+
+          echo "✅ VPC found: $VPC_ID"
+          echo ""
+
+          # ============================
+          # DELETE LOAD BALANCERS (ALB + NLB)
+          # ============================
+          echo "🧹 Deleting ALBs & NLBs in VPC..."
+
+          LB_ARNS=$(aws elbv2 describe-load-balancers \
+            --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" \
+            --output text)
+
+          if [ -n "$LB_ARNS" ]; then
+            for LB_ARN in $LB_ARNS; do
+              echo "  Deleting LB: $LB_ARN"
+              aws elbv2 delete-load-balancer --load-balancer-arn "$LB_ARN"
+            done
+          else
+            echo "  No ALBs/NLBs found."
+          fi
+
+          echo "⏳ Waiting 40s for LB deletion..."
+          sleep 40
+          echo ""
+
+          # ============================
+          # DELETE TARGET GROUPS
+          # ============================
+          echo "🧹 Deleting Target Groups in VPC..."
+
+          TG_ARNS=$(aws elbv2 describe-target-groups \
+            --query "TargetGroups[?VpcId=='$VPC_ID'].TargetGroupArn" \
+            --output text)
+
+          if [ -n "$TG_ARNS" ]; then
+            for TG_ARN in $TG_ARNS; do
+              echo "  Deleting Target Group: $TG_ARN"
+              aws elbv2 delete-target-group --target-group-arn "$TG_ARN"
+            done
+          else
+            echo "  No Target Groups found."
+          fi
+          echo ""
+
+          # ============================
+          # DELETE SECURITY GROUPS
+          # ============================
+          echo "🧹 Deleting Security Groups in VPC..."
+
+          SG_IDS=$(aws ec2 describe-security-groups \
+            --filters "Name=vpc-id,Values=$VPC_ID" \
+            --query "SecurityGroups[?GroupName!='default'].GroupId" \
+            --output text)
+
+          if [ -n "$SG_IDS" ]; then
+            for SG_ID in $SG_IDS; do
+              echo "  Deleting Security Group: $SG_ID"
+              aws ec2 delete-security-group --group-id "$SG_ID" 2>/dev/null || echo "    ⚠️ Failed (in use)"
+            done
+          else
+            echo "  No Security Groups found."
+          fi
+          echo ""
+
+          echo "🎉 Cleanup completed for VPC: $VPC_ID"
           
 
   destroy-bootstrap:
