@@ -326,8 +326,8 @@ jobs:
               aws elbv2 delete-load-balancer --load-balancer-arn "$LB" || true
             done
 
-            echo "⏳ Waiting 40s for ALB deletion..."
-            sleep 40
+            echo "⏳ Waiting 60s for ALB deletion..."
+            sleep 60
 
             echo "🧹 Deleting Target Groups..."
             TG_ARNS=$(aws elbv2 describe-target-groups \
@@ -339,6 +339,9 @@ jobs:
               aws elbv2 delete-target-group --target-group-arn "$TG" || true
             done
 
+            echo "⏳ Waiting 20s..."
+            sleep 20
+
             echo "🔧 Cleaning Security Groups..."
             SG_IDS=$(aws ec2 describe-security-groups \
               --filters "Name=vpc-id,Values=$VPC_ID" \
@@ -346,22 +349,86 @@ jobs:
               --output text)
 
             for SG in $SG_IDS; do
+              echo "  ➤ Checking SG: $SG"
+              
               ENIS=$(aws ec2 describe-network-interfaces \
                 --filters "Name=group-id,Values=$SG" \
                 --query "NetworkInterfaces[].NetworkInterfaceId" \
                 --output text)
 
               for ENI in $ENIS; do
-                echo "  ➤ Deleting ENI: $ENI"
+                echo "    - Deleting ENI: $ENI"
                 aws ec2 delete-network-interface --network-interface-id "$ENI" || true
               done
             done
 
-            sleep 10
+            echo "⏳ Waiting 20s for ENI cleanup..."
+            sleep 20
 
+            echo "🧹 Deleting Security Groups (1st attempt)..."
             for SG in $SG_IDS; do
-              echo "  ➤ Deleting SG: $SG"
-              aws ec2 delete-security-group --group-id "$SG" 2>/dev/null || true
+              SG_NAME=$(aws ec2 describe-security-groups \
+                --group-ids "$SG" \
+                --query "SecurityGroups[0].GroupName" \
+                --output text 2>/dev/null || echo "")
+              
+              echo "  ➤ Deleting SG: $SG ($SG_NAME)"
+              aws ec2 delete-security-group --group-id "$SG" 2>/dev/null \
+                && echo "    ✔ Deleted" \
+                || echo "    ⚠️ Still in use, will retry..."
+            done
+
+            echo "⏳ Waiting 30s before retry..."
+            sleep 30
+
+            echo "🧹 Deleting Security Groups (2nd attempt)..."
+            for SG in $SG_IDS; do
+              SG_EXISTS=$(aws ec2 describe-security-groups \
+                --group-ids "$SG" \
+                --query "SecurityGroups[0].GroupId" \
+                --output text 2>/dev/null || echo "")
+              
+              if [ -n "$SG_EXISTS" ] && [ "$SG_EXISTS" != "None" ]; then
+                echo "  ➤ Retry deleting SG: $SG"
+                aws ec2 delete-security-group --group-id "$SG" 2>/dev/null \
+                  && echo "    ✔ Deleted" \
+                  || echo "    ⚠️ Failed - may require manual deletion"
+              fi
+            done
+
+            echo "⏳ Waiting 20s..."
+            sleep 20
+
+            echo "🧹 Final Security Groups cleanup (3rd attempt)..."
+            for SG in $SG_IDS; do
+              SG_EXISTS=$(aws ec2 describe-security-groups \
+                --group-ids "$SG" \
+                --query "SecurityGroups[0].GroupId" \
+                --output text 2>/dev/null || echo "")
+              
+              if [ -n "$SG_EXISTS" ] && [ "$SG_EXISTS" != "None" ]; then
+                echo "  ➤ Final attempt for SG: $SG"
+                
+                aws ec2 revoke-security-group-ingress \
+                  --group-id "$SG" \
+                  --ip-permissions "$(aws ec2 describe-security-groups \
+                    --group-ids "$SG" \
+                    --query 'SecurityGroups[0].IpPermissions' \
+                    --output json)" 2>/dev/null || true
+                
+                aws ec2 revoke-security-group-egress \
+                  --group-id "$SG" \
+                  --ip-permissions "$(aws ec2 describe-security-groups \
+                    --group-ids "$SG" \
+                    --query 'SecurityGroups[0].IpPermissionsEgress' \
+                    --output json)" 2>/dev/null || true
+                
+                sleep 5
+                
+                aws ec2 delete-security-group --group-id "$SG" 2>/dev/null \
+                  && echo "    ✔ Deleted" \
+                  || echo "    ❌ Could not delete - manual intervention required"
+              fi
             done
           fi
 
