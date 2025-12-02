@@ -339,8 +339,9 @@ jobs:
           # ============================
           # CLEAN SECURITY GROUP ATTACHMENTS
           # ============================
-          echo "🔧 Cleaning Security Group dependencies..."
 
+          # Clean Security Group dependencies
+          echo "🔧 Cleaning Security Group dependencies..."
           SG_IDS=$(aws ec2 describe-security-groups \
             --filters "Name=vpc-id,Values=$VPC_ID" \
             --query "SecurityGroups[?GroupName!='default'].GroupId" \
@@ -349,7 +350,6 @@ jobs:
           for SG in $SG_IDS; do
             echo "  ➤ Checking SG: $SG"
 
-            # Remove ENI attachments first (otherwise can't delete SG)
             ENIS=$(aws ec2 describe-network-interfaces \
               --filters "Name=group-id,Values=$SG" \
               --query "NetworkInterfaces[].NetworkInterfaceId" \
