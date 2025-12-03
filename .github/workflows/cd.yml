@@ -123,7 +123,7 @@ jobs:
   destroy:
     needs: deploy
     runs-on: ubuntu-latest
-    if: github.event.inputs.action == 'destroy'
+    if: github.event.inputs.action == 'destroy' || needs.deploy.result == 'success'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
