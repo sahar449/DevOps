@@ -268,7 +268,7 @@ jobs:
 
   destroy-bootstrap:
     needs: destroy
-    if: github.event.inputs.action == 'destroy'
+    if: github.event.inputs.action == 'destroy' && needs.destroy.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
