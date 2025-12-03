@@ -33,11 +33,8 @@ jobs:
   apply:
     runs-on: ubuntu-latest
     if: |
-      github.event_name == 'workflow_dispatch' ||
-      (
-        github.event_name == 'workflow_run' &&
-        github.event.workflow_run.conclusion == 'success'
-      )
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -110,13 +107,11 @@ jobs:
           echo "⏳ Waiting for application to be ready..."
           
           for i in {1..60}; do
-            # Get both response body and HTTP status
             HTTP_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" "$URL" 2>/dev/null || echo "000")
             RESPONSE=$(cat /tmp/response.txt 2>/dev/null || echo "")
             
             echo "Attempt $i/60 - HTTP: $HTTP_CODE - Body: $RESPONSE"
             
-            # Success if HTTP 200 OR body contains "OK"
             if [ "$HTTP_CODE" = "200" ] || [ "$RESPONSE" = "OK" ]; then
               echo "✅ App is live!"
               exit 0
@@ -127,15 +122,13 @@ jobs:
           
           echo "❌ Smoke test failed after 60 attempts"
           exit 1
+
   # ============================================
   # Job 2: DESTROY (Cleanup)
   # ============================================
   destroy:
-    needs: apply
     runs-on: ubuntu-latest
-    if: >
-      (needs.apply.result == 'success') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy')
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -180,18 +173,15 @@ jobs:
           if [ -n "$HOSTED_ZONE_ID" ] && [ "$HOSTED_ZONE_ID" != "None" ]; then
             echo "Found Hosted Zone: $HOSTED_ZONE_ID"
             
-            # Get all records EXCEPT NS and SOA (and apex domain)
             RECORDS=$(aws route53 list-resource-record-sets \
               --hosted-zone-id "$HOSTED_ZONE_ID" \
               --query "ResourceRecordSets[?Type!='NS' && Type!='SOA']" \
               --output json)
             
-            # Delete each subdomain record
             echo "$RECORDS" | jq -c '.[]' | while read -r record; do
               RECORD_NAME=$(echo "$record" | jq -r '.Name')
               RECORD_TYPE=$(echo "$record" | jq -r '.Type')
               
-              # Skip apex domain (saharbittman.com itself)
               if [[ "$RECORD_NAME" == "saharbittman.com." ]]; then
                 echo "⏭️  Skipping apex record: $RECORD_NAME ($RECORD_TYPE)"
                 continue
@@ -199,7 +189,6 @@ jobs:
               
               echo "🗑️  Deleting DNS record: $RECORD_NAME ($RECORD_TYPE)"
               
-              # Create change batch for deletion
               CHANGE_BATCH=$(cat <<EOF
           {
             "Changes": [{
@@ -222,7 +211,7 @@ jobs:
             echo "⚠️ Hosted zone for saharbittman.com not found"
           fi
 
-          # Cleanup Load Balancer, Target Groups
+          # Cleanup Load Balancers
           echo "🗑️ Cleaning up Load Balancers..."
           CLB_ARN=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?LoadBalancerName=='${{ env.ARGOCD_CLB }}'].LoadBalancerArn" --output text)
           if [ -n "$CLB_ARN" ] && [ "$CLB_ARN" != "None" ]; then
@@ -250,7 +239,6 @@ jobs:
           if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
             echo "Found VPC: $VPC_ID"
             
-            # Delete all ALBs/NLBs in VPC
             LB_ARNS=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" --output text)
             for LB in $LB_ARNS; do
               LISTENERS=$(aws elbv2 describe-listeners --load-balancer-arn "$LB" --query "Listeners[].ListenerArn" --output text)
@@ -261,14 +249,12 @@ jobs:
             done
             sleep 90
             
-            # Delete Target Groups
             TG_ARNS=$(aws elbv2 describe-target-groups --query "TargetGroups[?VpcId=='$VPC_ID'].TargetGroupArn" --output text)
             for TG in $TG_ARNS; do
               aws elbv2 delete-target-group --target-group-arn "$TG" || true
             done
             sleep 30
 
-            # Delete ENIs attached to Security Groups
             SG_IDS=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[?GroupName!='default'].GroupId" --output text)
             for SG in $SG_IDS; do
               ENIS=$(aws ec2 describe-network-interfaces --filters "Name=group-id,Values=$SG" --query "NetworkInterfaces[].NetworkInterfaceId" --output text)
@@ -278,7 +264,6 @@ jobs:
             done
             sleep 30
 
-            # Delete Security Groups
             for SG in $SG_IDS; do
               INGRESS=$(aws ec2 describe-security-groups --group-ids "$SG" --query 'SecurityGroups[0].IpPermissions' --output json || echo "[]")
               EGRESS=$(aws ec2 describe-security-groups --group-ids "$SG" --query 'SecurityGroups[0].IpPermissionsEgress' --output json || echo "[]")
