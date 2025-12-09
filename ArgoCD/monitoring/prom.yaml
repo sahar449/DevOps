@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: prometheus-stack
+  name: prometheus-helm
   namespace: argocd
 spec:
   generators:
@@ -15,6 +15,7 @@ spec:
       name: '{{name}}'
       annotations:
         argocd.argoproj.io/sync-wave: '{{wave}}'
+        argocd.argoproj.io/sync-options: ServerSideApply=true
     spec:
       project: default
       source:
@@ -25,23 +26,22 @@ spec:
           values: |
             prometheus:
               service:
-                type: LoadBalancer
-                annotations:
-                  service.beta.kubernetes.io/aws-load-balancer-type: "classic"
-                loadBalancerClass: ""
+                type: ClusterIP
               prometheusSpec:
                 podMonitorSelectorNilUsesHelmValues: false
                 serviceMonitorSelectorNilUsesHelmValues: false
+                serviceMonitorNamespaceSelector: {}
+                serviceMonitorSelector: {}
+                ruleNamespaceSelector: {}
+                ruleSelector: {}
             
             alertmanager:
               service:
-                type: LoadBalancer
-                annotations:
-                  service.beta.kubernetes.io/aws-load-balancer-type: "classic"
-                loadBalancerClass: ""
+                type: ClusterIP
               config:
                 route:
                   receiver: 'email'
+                  repeat_interval: 5m
                 receivers:
                   - name: 'email'
                     email_configs:
@@ -54,25 +54,7 @@ spec:
             
             grafana:
               service:
-                type: LoadBalancer
-                annotations:
-                  service.beta.kubernetes.io/aws-load-balancer-type: "classic"
-                loadBalancerClass: ""
-            
-            additionalPrometheusRulesMap:
-              pod-alerts:
-                groups:
-                  - name: pods
-                    interval: 30s
-                    rules:
-                      - alert: PodDown
-                        expr: kube_pod_status_phase{phase="Running"} == 0
-                        for: 1m
-                        labels:
-                          severity: critical
-                        annotations:
-                          summary: "Pod down"
-                          description: "Pod {{ $labels.pod }} is down"
+                type: ClusterIP
       
       destination:
         server: https://kubernetes.default.svc
@@ -84,3 +66,36 @@ spec:
           selfHeal: true
         syncOptions:
           - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: monitoring-objects
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: monitoring-objects
+            wave: "3"
+  
+  template:
+    metadata:
+      name: '{{name}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{wave}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/sahar449/DevOps.git
+        targetRevision: main
+        path: ArgoCD/monitoring/objects
+      
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: monitoring
+      
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true

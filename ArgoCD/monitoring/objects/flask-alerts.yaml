@@ -1,0 +1,56 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: flask-app-monitor
+  namespace: default
+  labels:
+    app: flask-app
+    release: prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: flask-app
+  endpoints:
+    - port: http
+      path: /health
+      interval: 5s
+      scrapeTimeout: 3s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: flask-app-alerts
+  namespace: default
+  labels:
+    release: prometheus-stack
+spec:
+  groups:
+    - name: flask-app-health
+      interval: 5s
+      rules:
+        - alert: FlaskHealthCheckFailed
+          expr: up{job="flask-app-monitor"} == 0
+          for: 5s
+          labels:
+            severity: critical
+          annotations:
+            summary: "Flask app health check failed"
+            description: "Flask app health endpoint is not responding for more than 5 seconds"
+        
+        - alert: FlaskPodDown
+          expr: kube_pod_status_phase{namespace="default",pod=~"flask-app.*",phase="Running"} == 0
+          for: 5s
+          labels:
+            severity: critical
+          annotations:
+            summary: "Flask pod is down"
+            description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is not running"
+        
+        - alert: FlaskPodRestarting
+          expr: rate(kube_pod_container_status_restarts_total{namespace="default",pod=~"flask-app.*"}[5m]) > 0
+          for: 5s
+          labels:
+            severity: warning
+          annotations:
+            summary: "Flask pod is restarting"
+            description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in the last 5 minutes"
