@@ -93,7 +93,7 @@ jobs:
             --query "Vpcs[0].VpcId" --output text)
           export ECR_NAME=${{ secrets.ECR_NAME }}
           export AWS_ACCOUNT_NUMBER=${{ secrets.AWS_ACCOUNT_NUMBER }}
-          export AWS_ACCOUNT_NUMBER=${{ secrets.PROM_PASS}}
+          export PROM_PASS=${{ secrets.PROM_PASS}}
           envsubst < ArgoCD/externalCharts/alb_dns.yaml | kubectl apply -f -
           envsubst < ArgoCD/externalCharts/secrets.yaml | kubectl apply -f -
           envsubst < ArgoCD/myChart/argo.yaml | kubectl apply -f -
