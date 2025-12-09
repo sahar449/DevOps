@@ -1,0 +1,73 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus-stack
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 65.0.0
+    helm:
+      values: |
+        prometheus:
+          service:
+            type: LoadBalancer
+            annotations:
+              service.beta.kubernetes.io/aws-load-balancer-type: "classic"
+          prometheusSpec:
+            podMonitorSelectorNilUsesHelmValues: false
+            serviceMonitorSelectorNilUsesHelmValues: false
+        
+        alertmanager:
+          service:
+            type: LoadBalancer
+            annotations:
+              service.beta.kubernetes.io/aws-load-balancer-type: "classic"
+          config:
+            route:
+              receiver: 'email'
+            receivers:
+              - name: 'email'
+                email_configs:
+                  - to: 'sahar449@gmail.com'
+                    from: 'sahar449@gmail.com'
+                    smarthost: smtp.gmail.com:587
+                    auth_username: 'sahar449@gmail.com'
+                    auth_password: ${PROM_PASS}
+                    require_tls: true
+        
+        grafana:
+          service:
+            type: LoadBalancer
+            annotations:
+              service.beta.kubernetes.io/aws-load-balancer-type: "classic"
+        
+        additionalPrometheusRulesMap:
+          pod-alerts:
+            groups:
+              - name: pods
+                interval: 30s
+                rules:
+                  - alert: PodDown
+                    expr: kube_pod_status_phase{phase="Running"} == 0
+                    for: 1m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: "Pod down"
+                      description: "Pod {{ $labels.pod }} is down"
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

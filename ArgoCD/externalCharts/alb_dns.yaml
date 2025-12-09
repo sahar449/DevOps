@@ -3,6 +3,8 @@ kind: ApplicationSet
 metadata:
   name: eks-charts-applications
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   generators:
     - list:
@@ -24,6 +26,8 @@ spec:
   template:
     metadata:
       name: '{{name}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: "1"
     spec:
       project: default
       source:
