@@ -9,13 +9,12 @@ spec:
         elements:
           - name: prometheus-stack
             wave: "2"
-  
+
   template:
     metadata:
       name: '{{name}}'
       annotations:
         argocd.argoproj.io/sync-wave: '{{wave}}'
-        #argocd.argoproj.io/sync-options: ServerSideApply=true
     spec:
       project: default
       source:
@@ -24,78 +23,49 @@ spec:
         targetRevision: 65.0.0
         helm:
           values: |
+            defaultRules:
+              create: false
+
+            kubeStateMetrics:
+              enabled: false
+
+            nodeExporter:
+              enabled: false
+
+            prometheusOperator:
+              enabled: true
+              admissionWebhooks:
+                enabled: false
+
             prometheus:
+              enabled: true
               service:
                 type: ClusterIP
               prometheusSpec:
-                podMonitorSelectorNilUsesHelmValues: false
-                serviceMonitorSelectorNilUsesHelmValues: false
-                serviceMonitorNamespaceSelector: {}
                 serviceMonitorSelector: {}
-                ruleNamespaceSelector: {}
+                serviceMonitorNamespaceSelector: {}
+                podMonitorSelector: {}
+                podMonitorNamespaceSelector: {}
                 ruleSelector: {}
-            
+                ruleNamespaceSelector: {}
+
             alertmanager:
+              enabled: true
               service:
                 type: ClusterIP
-              config:
-                route:
-                  receiver: 'email'
-                  repeat_interval: 5m
-                receivers:
-                  - name: 'email'
-                    email_configs:
-                      - to: 'sahar449@gmail.com'
-                        from: 'sahar449@gmail.com'
-                        smarthost: smtp.gmail.com:587
-                        auth_username: 'sahar449@gmail.com'
-                        auth_password: ${PROM_PASS}
-                        require_tls: true
-            
+
             grafana:
+              enabled: true
               service:
                 type: ClusterIP
-      
+
       destination:
         server: https://kubernetes.default.svc
         namespace: monitoring
-      
+
       syncPolicy:
         automated:
           prune: true
           selfHeal: true
         syncOptions:
           - CreateNamespace=true
----
-apiVersion: argoproj.io/v1alpha1
-kind: ApplicationSet
-metadata:
-  name: monitoring-objects
-  namespace: argocd
-spec:
-  generators:
-    - list:
-        elements:
-          - name: monitoring-objects
-            wave: "3"
-  
-  template:
-    metadata:
-      name: '{{name}}'
-      annotations:
-        argocd.argoproj.io/sync-wave: '{{wave}}'
-    spec:
-      project: default
-      source:
-        repoURL: https://github.com/sahar449/DevOps.git
-        targetRevision: main
-        path: ArgoCD/monitoring/objects
-      
-      destination:
-        server: https://kubernetes.default.svc
-        namespace: monitoring
-      
-      syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
