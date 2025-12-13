@@ -47,7 +47,8 @@ spec:
             cloudWatchLogs:
               enabled: {{enableLogs}}
               logGroupName: /aws/eks/eksdemo-cluster/logs
-              autoCreateGroup: false
+              autoCreateGroup: true
+              
 
             firehose:
               enabled: false
