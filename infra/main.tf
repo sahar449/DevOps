@@ -48,8 +48,3 @@ module "rds" {
   private_subnets = module.vpc.private_subnet_ids
   cidr_blocks = module.vpc.cidr_blocks
 }
-
-
-module "monitoring" {
-  source = "./modules/monitoring"
-}
