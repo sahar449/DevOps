@@ -54,7 +54,6 @@ resource "aws_iam_role_policy_attachment" "fluent_bit_attach" {
 resource "aws_eks_addon" "fluent_bit" {
   cluster_name             = "eksdemo-cluster"
   addon_name               = "aws-for-fluent-bit"
-  addon_version            = "v2.32.2-eksbuild.1"
   service_account_role_arn = aws_iam_role.fluent_bit_role.arn
 }
 
@@ -125,6 +124,5 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_agent_attach" {
 resource "aws_eks_addon" "cloudwatch_agent" {
   cluster_name             = "eksdemo-cluster"
   addon_name               = "cloudwatch-agent"
-  addon_version            = "1.247.0-eksbuild.1"
   service_account_role_arn = aws_iam_role.cloudwatch_agent_role.arn
 }
