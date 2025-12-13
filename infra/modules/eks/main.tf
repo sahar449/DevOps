@@ -1,15 +1,11 @@
-#######################################
-# Random String Generator for unique names
-#######################################
+# Random String Generator
 resource "random_string" "suffix" {
   length  = 8
   special = false
   upper   = false
 }
 
-#######################################
-# EKS Cluster IAM Role
-#######################################
+# IAM Role for EKS Cluster
 resource "aws_iam_role" "eks_cluster_role" {
   name = "${var.cluster_name}-eks-cluster-role-${random_string.suffix.result}"
 
@@ -23,33 +19,34 @@ resource "aws_iam_role" "eks_cluster_role" {
       }
     }]
   })
+
 }
 
+# IAM Role Policy Attachment for EKS Cluster
 resource "aws_iam_role_policy_attachment" "eks_cluster_AmazonEKSClusterPolicy" {
   role       = aws_iam_role.eks_cluster_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 }
 
-#######################################
-# EKS Cluster
-#######################################
+# EKS Cluster Resource
 resource "aws_eks_cluster" "this" {
   name     = var.cluster_name
   role_arn = aws_iam_role.eks_cluster_role.arn
-  version  = "1.33"
 
   vpc_config {
     subnet_ids = var.private_subnet_ids
   }
 
+  depends_on = [aws_iam_role.eks_cluster_role]
+
   lifecycle {
-    ignore_changes = [name]
+    ignore_changes = [
+      name
+    ]
   }
 }
 
-#######################################
-# Worker Node IAM Role
-#######################################
+# IAM Role for Worker Nodes
 resource "aws_iam_role" "node_group_role" {
   name = "${var.cluster_name}-eks-nodegroup-role-${random_string.suffix.result}"
 
@@ -57,12 +54,15 @@ resource "aws_iam_role" "node_group_role" {
     Version = "2012-10-17",
     Statement = [{
       Effect = "Allow",
-      Principal = { Service = "ec2.amazonaws.com" },
-      Action    = "sts:AssumeRole"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      },
+      Action = "sts:AssumeRole"
     }]
   })
 }
 
+# IAM Role Policy Attachments for Worker Nodes
 resource "aws_iam_role_policy_attachment" "worker_node_AmazonEKSWorkerNodePolicy" {
   role       = aws_iam_role.node_group_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
@@ -78,9 +78,7 @@ resource "aws_iam_role_policy_attachment" "worker_node_AmazonEKS_CNI_Policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
 }
 
-#######################################
 # EKS Node Group
-#######################################
 resource "aws_eks_node_group" "private_nodes" {
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = "${var.cluster_name}-ng-${random_string.suffix.result}"
@@ -96,9 +94,7 @@ resource "aws_eks_node_group" "private_nodes" {
   instance_types = ["t3.medium"]
 }
 
-#######################################
-# OIDC Provider for IRSA
-#######################################
+# Set up OIDC provider for the cluster
 data "tls_certificate" "eks" {
   url = aws_eks_cluster.this.identity[0].oidc[0].issuer
 }
@@ -109,6 +105,25 @@ resource "aws_iam_openid_connect_provider" "eks" {
   url             = aws_eks_cluster.this.identity[0].oidc[0].issuer
 }
 
+resource "aws_security_group" "eks_nodes" {
+  name        = "${var.cluster_name}-eks-nodes"
+  description = "Security group for EKS nodes"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port   = 0
+    to_port     = 65535
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
 # #######################################
 # # Fluent Bit IAM Role + Policy + SA + Addon
 # #######################################
