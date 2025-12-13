@@ -178,9 +178,11 @@ resource "aws_iam_role_policy_attachment" "fluent_bit_attach" {
 ###################################
 # Fluent Bit Addon
 ###################################
+
 resource "aws_eks_addon" "fluent_bit" {
   cluster_name             = aws_eks_cluster.this.name
-  addon_name               = "aws-for-fluent-bit"
+  addon_name               = "fluent-bit"
+  addon_version            = "v4.2.0-eksbuild.1"
   service_account_role_arn = aws_iam_role.fluent_bit_role.arn
   depends_on = [
     aws_eks_cluster.this
@@ -253,7 +255,8 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_agent_attach" {
 ###################################
 resource "aws_eks_addon" "cloudwatch_agent" {
   cluster_name             = aws_eks_cluster.this.name
-  addon_name               = "cloudwatch-agent"
+  addon_name               = "amazon-cloudwatch-observability"
+  addon_version            = "v4.7.0-eksbuild.1"
   service_account_role_arn = aws_iam_role.cloudwatch_agent_role.arn
   depends_on = [
     aws_eks_cluster.this
