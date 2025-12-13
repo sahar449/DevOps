@@ -457,7 +457,7 @@ resource "aws_iam_role" "fluent_bit_role" {
       }
       Condition = {
         StringEquals = {
-          "${replace(var.oidc_provider_url, "https://", "")}:sub" = "system:serviceaccount:kube-system:aws-for-fluent-bit"
+          "${replace(var.oidc_provider_url, "https://", "")}:sub" = "system:serviceaccount:kube-system:fluent-bit"
           "${replace(var.oidc_provider_url, "https://", "")}:aud" = "sts.amazonaws.com"
         }
       }
