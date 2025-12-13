@@ -186,6 +186,9 @@ resource "kubernetes_service_account" "fluent_bit" {
       "eks.amazonaws.com/role-arn" = aws_iam_role.fluent_bit_role.arn
     }
   }
+  depends_on = [
+    aws_eks_cluster.this,
+  ]
 }
 
 resource "aws_eks_addon" "fluent_bit" {
@@ -268,6 +271,9 @@ resource "kubernetes_service_account" "cloudwatch_agent" {
       "eks.amazonaws.com/role-arn" = aws_iam_role.cloudwatch_agent_role.arn
     }
   }
+  depends_on = [
+    aws_eks_cluster.this,
+  ]
 }
 
 resource "aws_eks_addon" "cloudwatch_agent" {
