@@ -175,6 +175,7 @@ resource "aws_eks_addon" "fluent_bit" {
   service_account_role_arn = aws_iam_role.fluent_bit_role.arn
   depends_on = [aws_eks_cluster.this]
 }
+
 #######################################
 # CloudWatch Agent IAM Role + Policy + SA + Addon
 #######################################
