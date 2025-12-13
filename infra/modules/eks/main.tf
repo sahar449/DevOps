@@ -169,13 +169,12 @@ resource "kubernetes_service_account" "fluent_bit" {
 }
 
 resource "aws_eks_addon" "fluent_bit" {
-  cluster_name             = aws_eks_cluster.this.name
-  addon_name               = "fluent-bit"
-  addon_version            = "v4.2.0-eksbuild.1"
+  cluster_name = aws_eks_cluster.this.name
+  addon_name   = "fluent-bit"
+  addon_version = "v4.2.0-eksbuild.1"
   service_account_role_arn = aws_iam_role.fluent_bit_role.arn
-  depends_on = [kubernetes_service_account.fluent_bit]
+  depends_on = [aws_eks_cluster.this]
 }
-
 #######################################
 # CloudWatch Agent IAM Role + Policy + SA + Addon
 #######################################
@@ -249,9 +248,9 @@ resource "kubernetes_service_account" "cloudwatch_agent" {
 }
 
 resource "aws_eks_addon" "cloudwatch_agent" {
-  cluster_name             = aws_eks_cluster.this.name
-  addon_name               = "amazon-cloudwatch-observability"
-  addon_version            = "v4.7.0-eksbuild.1"
+  cluster_name = aws_eks_cluster.this.name
+  addon_name   = "amazon-cloudwatch-observability"
+  addon_version = "v4.7.0-eksbuild.1"
   service_account_role_arn = aws_iam_role.cloudwatch_agent_role.arn
-  depends_on = [kubernetes_service_account.cloudwatch_agent]
+  depends_on = [aws_eks_cluster.this]
 }
