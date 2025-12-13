@@ -7,24 +7,24 @@ spec:
   generators:
     - list:
         elements:
-          - name: fluent-bit # sa name
+          - name: fluent-bit
             chart: aws-for-fluent-bit
             version: "0.1.34"
             namespace: kube-system
-            roleName: eks-fluent-bit-role # aws iam role
-            
-          - name: cloudwatch-agent # sa name
+            roleName: eks-fluent-bit-role
+
+          - name: cloudwatch-agent
             chart: aws-cloudwatch-metrics
             version: "0.0.9"
             namespace: amazon-cloudwatch
-            roleName: eks-cloudwatch-agent-role # aws iam role
-  
+            roleName: eks-cloudwatch-agent-role
+
   template:
     metadata:
       name: '{{name}}'
     spec:
       project: default
-      
+
       source:
         repoURL: https://aws.github.io/eks-charts
         chart: '{{chart}}'
@@ -33,24 +33,29 @@ spec:
           values: |
             clusterName: eksdemo-cluster
             region: us-west-2
+
             serviceAccount:
               create: true
               name: '{{name}}'
               annotations:
                 eks.amazonaws.com/role-arn: arn:aws:iam::${AWS_ACCOUNT_NUMBER}:role/{{roleName}}
+
+            {{- if eq .name "fluent-bit" }}
             cloudWatchLogs:
               enabled: true
               logGroupName: /aws/eks/eksdemo-cluster/logs
-              autoCreateGroup: true
+              autoCreateGroup: false
+
             firehose:
               enabled: false
             kinesis:
               enabled: false
-      
+            {{- end }}
+
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{namespace}}'
-      
+
       syncPolicy:
         automated:
           prune: true
