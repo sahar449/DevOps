@@ -13,6 +13,7 @@ spec:
             namespace: kube-system
             saName: fluent-bit
             roleArn: arn:aws:iam::${AWS_ACCOUNT_NUMBER}:role/eks-fluent-bit-role
+            enableLogs: "true"
 
           - appName: cloudwatch-agent
             chart: aws-cloudwatch-metrics
@@ -20,6 +21,7 @@ spec:
             namespace: amazon-cloudwatch
             saName: cloudwatch-agent
             roleArn: arn:aws:iam::${AWS_ACCOUNT_NUMBER}:role/eks-cloudwatch-agent-role
+            enableLogs: "false"
 
   template:
     metadata:
@@ -38,12 +40,12 @@ spec:
 
             serviceAccount:
               create: true
-              name: {{saName}}
+              name: '{{saName}}'
               annotations:
-                eks.amazonaws.com/role-arn: {{roleArn}}
+                eks.amazonaws.com/role-arn: '{{roleArn}}'
 
             cloudWatchLogs:
-              enabled: true
+              enabled: {{enableLogs}}
               logGroupName: /aws/eks/eksdemo-cluster/logs
               autoCreateGroup: false
 
