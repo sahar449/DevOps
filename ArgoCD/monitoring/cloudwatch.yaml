@@ -7,17 +7,17 @@ spec:
   generators:
     - list:
         elements:
-          - name: fluent-bit
+          - name: fluent-bit # sa name
             chart: aws-for-fluent-bit
             version: "0.1.34"
             namespace: kube-system
-            roleName: eks-fluent-bit-role
+            roleName: eks-fluent-bit-role # aws iam role
             
-          - name: cloudwatch-agent
+          - name: cloudwatch-agent # sa name
             chart: aws-cloudwatch-metrics
             version: "0.0.9"
             namespace: amazon-cloudwatch
-            roleName: eks-cloudwatch-agent-role
+            roleName: eks-cloudwatch-agent-role # aws iam role
   
   template:
     metadata:
@@ -31,7 +31,7 @@ spec:
         targetRevision: '{{version}}'
         helm:
           values: |
-            clusterName: demo-cluster
+            clusterName: eksdemo-cluster
             region: us-west-2
             serviceAccount:
               create: true
