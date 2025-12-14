@@ -30,7 +30,7 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_AmazonEKSClusterPolicy" {
 resource "aws_eks_cluster" "this" {
   name     = var.cluster_name
   role_arn = aws_iam_role.eks_cluster_role.arn
-  version = "1.33"
+  version = "1.34"
   vpc_config {
     subnet_ids = var.private_subnet_ids
   }
@@ -181,76 +181,16 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_observability_attach" {
 }
 
 #######################################
-# CloudWatch Observability - EKS Addon
+# CloudWatch Observability - EKS Addon (אחד בלבד!)
 #######################################
 resource "aws_eks_addon" "cloudwatch_observability" {
   cluster_name             = aws_eks_cluster.this.name
   addon_name               = "amazon-cloudwatch-observability"
-  addon_version            = "v2.3.0-eksbuild.1"
+  addon_version            = "v5.0.0-eksbuild.1"
   service_account_role_arn = aws_iam_role.cloudwatch_observability_role.arn
   
   depends_on = [
     aws_eks_node_group.private_nodes,
     aws_iam_role_policy_attachment.cloudwatch_observability_attach
-  ]
-}
-
-#######################################
-# Fluent Bit IAM Role + Policy + Addon
-#######################################
-resource "aws_iam_policy" "fluent_bit_policy" {
-  name        = "FluentBitCloudWatchPolicy"
-  description = "IAM policy for Fluent Bit to write logs to CloudWatch"
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Effect = "Allow",
-      Action = [
-        "logs:CreateLogGroup",
-        "logs:CreateLogStream",
-        "logs:PutLogEvents",
-        "logs:DescribeLogStreams"
-      ],
-      Resource = "*"
-    }]
-  })
-}
-
-resource "aws_iam_role" "fluent_bit_role" {
-  name = "eks-fluent-bit-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Effect = "Allow",
-      Action = "sts:AssumeRoleWithWebIdentity",
-      Principal = {
-        Federated = aws_iam_openid_connect_provider.eks.arn
-      },
-      Condition = {
-        StringEquals = {
-          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:amazon-cloudwatch:fluent-bit"
-          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
-        }
-      }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "fluent_bit_attach" {
-  role       = aws_iam_role.fluent_bit_role.name
-  policy_arn = aws_iam_policy.fluent_bit_policy.arn
-}
-
-resource "aws_eks_addon" "fluent_bit" {
-  cluster_name             = aws_eks_cluster.this.name
-  addon_name               = "amazon-cloudwatch-observability"
-  addon_version            = "v2.3.0-eksbuild.1"  
-  service_account_role_arn = aws_iam_role.fluent_bit_role.arn
-  
-  depends_on = [
-    aws_eks_node_group.private_nodes,
-    aws_iam_role_policy_attachment.fluent_bit_attach
   ]
 }
