@@ -125,7 +125,7 @@ resource "aws_security_group" "eks_nodes" {
   }
 }
 #######################################
-# Fluent Bit IAM Role + Policy + SA + Addon
+# Fluent Bit IAM Role + Policy + Addon
 #######################################
 resource "aws_iam_policy" "fluent_bit_policy" {
   name        = "FluentBitCloudWatchPolicy"
@@ -159,8 +159,8 @@ resource "aws_iam_role" "fluent_bit_role" {
       },
       Condition = {
         StringEquals = {
-          "${replace(aws_iam_openid_connect_provider.eks.url,"https://","")}:sub" = "system:serviceaccount:amazon-cloudwatch:fluent-bit"
-          "${replace(aws_iam_openid_connect_provider.eks.url,"https://","")}:aud" = "sts.amazonaws.com"
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:amazon-cloudwatch:fluent-bit"
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
         }
       }
     }]
@@ -172,27 +172,20 @@ resource "aws_iam_role_policy_attachment" "fluent_bit_attach" {
   policy_arn = aws_iam_policy.fluent_bit_policy.arn
 }
 
-resource "kubernetes_service_account" "fluent_bit" {
-  metadata {
-    name      = "fluent-bit"
-    namespace = "amazon-cloudwatch"
-    annotations = {
-      "eks.amazonaws.com/role-arn" = aws_iam_role.fluent_bit_role.arn
-    }
-  }
-  depends_on = [aws_eks_cluster.this]
-}
-
 resource "aws_eks_addon" "fluent_bit" {
-  cluster_name = aws_eks_cluster.this.name
-  addon_name   = "fluent-bit"
-  addon_version = "v4.2.0-eksbuild.1"
+  cluster_name             = aws_eks_cluster.this.name
+  addon_name               = "amazon-cloudwatch-observability"
+  addon_version            = "v2.3.0-eksbuild.1"  # גרסה מעודכנת
   service_account_role_arn = aws_iam_role.fluent_bit_role.arn
-  depends_on = [aws_eks_cluster.this]
+  
+  depends_on = [
+    aws_eks_node_group.this,
+    aws_iam_role_policy_attachment.fluent_bit_attach
+  ]
 }
 
 #######################################
-# CloudWatch Agent IAM Role + Policy + SA + Addon
+# CloudWatch Agent IAM Role + Policy + Addon
 #######################################
 resource "aws_iam_policy" "cloudwatch_agent_policy" {
   name        = "CloudWatchAgentPolicy"
@@ -239,8 +232,8 @@ resource "aws_iam_role" "cloudwatch_agent_role" {
       },
       Condition = {
         StringEquals = {
-          "${replace(aws_iam_openid_connect_provider.eks.url,"https://","")}:sub" = "system:serviceaccount:amazon-cloudwatch:cloudwatch-agent"
-          "${replace(aws_iam_openid_connect_provider.eks.url,"https://","")}:aud" = "sts.amazonaws.com"
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:amazon-cloudwatch:cloudwatch-agent"
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
         }
       }
     }]
@@ -252,21 +245,15 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_agent_attach" {
   policy_arn = aws_iam_policy.cloudwatch_agent_policy.arn
 }
 
-resource "kubernetes_service_account" "cloudwatch_agent" {
-  metadata {
-    name      = "cloudwatch-agent"
-    namespace = "amazon-cloudwatch"
-    annotations = {
-      "eks.amazonaws.com/role-arn" = aws_iam_role.cloudwatch_agent_role.arn
-    }
-  }
-  depends_on = [aws_eks_cluster.this]
-}
 
-resource "aws_eks_addon" "cloudwatch_agent" {
-  cluster_name = aws_eks_cluster.this.name
-  addon_name   = "amazon-cloudwatch-observability"
-  addon_version = "v4.7.0-eksbuild.1"
+resource "aws_eks_addon" "cloudwatch_observability" {
+  cluster_name             = aws_eks_cluster.this.name
+  addon_name               = "amazon-cloudwatch-observability"
+  addon_version            = "v2.3.0-eksbuild.1"
   service_account_role_arn = aws_iam_role.cloudwatch_agent_role.arn
-  depends_on = [aws_eks_cluster.this]
+  
+  depends_on = [
+    aws_eks_node_group.this,
+    aws_iam_role_policy_attachment.cloudwatch_agent_attach
+  ]
 }
