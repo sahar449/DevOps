@@ -5,6 +5,13 @@ import os
 import time
 import traceback
 from datetime import datetime
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 SECRET_PATH = "/mnt/rds-secret"
@@ -13,7 +20,12 @@ DB_PORT = 3306
 # Health check WITHOUT DB dependency
 @app.route("/health")
 def health():
-    """Health check endpoint - no DB required"""
+    """Health check endpoint with detailed logging"""
+    forwarded_for = request.headers.get('X-Forwarded-For', '')
+    client_ip = forwarded_for.split(',')[0].strip() if forwarded_for else request.remote_addr
+    user_agent = request.headers.get('User-Agent', 'Unknown')
+    
+    logger.info(f"Health check - IP: {client_ip} | User-Agent: {user_agent}")
     return "OK", 200
 
 # Only initialize DB if secrets exist
