@@ -124,149 +124,149 @@ resource "aws_security_group" "eks_nodes" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
-# #######################################
-# # Fluent Bit IAM Role + Policy + SA + Addon
-# #######################################
-# resource "aws_iam_policy" "fluent_bit_policy" {
-#   name        = "FluentBitCloudWatchPolicy"
-#   description = "IAM policy for Fluent Bit to write logs to CloudWatch"
+#######################################
+# Fluent Bit IAM Role + Policy + SA + Addon
+#######################################
+resource "aws_iam_policy" "fluent_bit_policy" {
+  name        = "FluentBitCloudWatchPolicy"
+  description = "IAM policy for Fluent Bit to write logs to CloudWatch"
 
-#   policy = jsonencode({
-#     Version = "2012-10-17",
-#     Statement = [{
-#       Effect = "Allow",
-#       Action = [
-#         "logs:CreateLogGroup",
-#         "logs:CreateLogStream",
-#         "logs:PutLogEvents",
-#         "logs:DescribeLogStreams"
-#       ],
-#       Resource = "*"
-#     }]
-#   })
-# }
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Action = [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams"
+      ],
+      Resource = "*"
+    }]
+  })
+}
 
-# resource "aws_iam_role" "fluent_bit_role" {
-#   name = "eks-fluent-bit-role"
+resource "aws_iam_role" "fluent_bit_role" {
+  name = "eks-fluent-bit-role"
 
-#   assume_role_policy = jsonencode({
-#     Version = "2012-10-17",
-#     Statement = [{
-#       Effect = "Allow",
-#       Action = "sts:AssumeRoleWithWebIdentity",
-#       Principal = {
-#         Federated = aws_iam_openid_connect_provider.eks.arn
-#       },
-#       Condition = {
-#         StringEquals = {
-#           "${replace(aws_iam_openid_connect_provider.eks.url,"https://","")}:sub" = "system:serviceaccount:amazon-cloudwatch:fluent-bit"
-#           "${replace(aws_iam_openid_connect_provider.eks.url,"https://","")}:aud" = "sts.amazonaws.com"
-#         }
-#       }
-#     }]
-#   })
-# }
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Action = "sts:AssumeRoleWithWebIdentity",
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.eks.arn
+      },
+      Condition = {
+        StringEquals = {
+          "${replace(aws_iam_openid_connect_provider.eks.url,"https://","")}:sub" = "system:serviceaccount:amazon-cloudwatch:fluent-bit"
+          "${replace(aws_iam_openid_connect_provider.eks.url,"https://","")}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+}
 
-# resource "aws_iam_role_policy_attachment" "fluent_bit_attach" {
-#   role       = aws_iam_role.fluent_bit_role.name
-#   policy_arn = aws_iam_policy.fluent_bit_policy.arn
-# }
+resource "aws_iam_role_policy_attachment" "fluent_bit_attach" {
+  role       = aws_iam_role.fluent_bit_role.name
+  policy_arn = aws_iam_policy.fluent_bit_policy.arn
+}
 
-# resource "kubernetes_service_account" "fluent_bit" {
-#   metadata {
-#     name      = "fluent-bit"
-#     namespace = "amazon-cloudwatch"
-#     annotations = {
-#       "eks.amazonaws.com/role-arn" = aws_iam_role.fluent_bit_role.arn
-#     }
-#   }
-#   depends_on = [aws_eks_cluster.this]
-# }
+resource "kubernetes_service_account" "fluent_bit" {
+  metadata {
+    name      = "fluent-bit"
+    namespace = "amazon-cloudwatch"
+    annotations = {
+      "eks.amazonaws.com/role-arn" = aws_iam_role.fluent_bit_role.arn
+    }
+  }
+  depends_on = [aws_eks_cluster.this]
+}
 
-# resource "aws_eks_addon" "fluent_bit" {
-#   cluster_name = aws_eks_cluster.this.name
-#   addon_name   = "fluent-bit"
-#   addon_version = "v4.2.0-eksbuild.1"
-#   service_account_role_arn = aws_iam_role.fluent_bit_role.arn
-#   depends_on = [aws_eks_cluster.this]
-# }
+resource "aws_eks_addon" "fluent_bit" {
+  cluster_name = aws_eks_cluster.this.name
+  addon_name   = "fluent-bit"
+  addon_version = "v4.2.0-eksbuild.1"
+  service_account_role_arn = aws_iam_role.fluent_bit_role.arn
+  depends_on = [aws_eks_cluster.this]
+}
 
-# #######################################
-# # CloudWatch Agent IAM Role + Policy + SA + Addon
-# #######################################
-# resource "aws_iam_policy" "cloudwatch_agent_policy" {
-#   name        = "CloudWatchAgentPolicy"
-#   description = "IAM policy for CloudWatch Agent to publish metrics and logs"
+#######################################
+# CloudWatch Agent IAM Role + Policy + SA + Addon
+#######################################
+resource "aws_iam_policy" "cloudwatch_agent_policy" {
+  name        = "CloudWatchAgentPolicy"
+  description = "IAM policy for CloudWatch Agent to publish metrics and logs"
 
-#   policy = jsonencode({
-#     Version = "2012-10-17",
-#     Statement = [
-#       {
-#         Effect = "Allow",
-#         Action = [
-#           "cloudwatch:PutMetricData",
-#           "ec2:DescribeVolumes",
-#           "ec2:DescribeTags",
-#           "ec2:DescribeInstances",
-#           "ec2:DescribeInstanceStatus"
-#         ],
-#         Resource = "*"
-#       },
-#       {
-#         Effect = "Allow",
-#         Action = [
-#           "logs:CreateLogGroup",
-#           "logs:CreateLogStream",
-#           "logs:PutLogEvents",
-#           "logs:DescribeLogStreams"
-#         ],
-#         Resource = "*"
-#       }
-#     ]
-#   })
-# }
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "cloudwatch:PutMetricData",
+          "ec2:DescribeVolumes",
+          "ec2:DescribeTags",
+          "ec2:DescribeInstances",
+          "ec2:DescribeInstanceStatus"
+        ],
+        Resource = "*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
 
-# resource "aws_iam_role" "cloudwatch_agent_role" {
-#   name = "eks-cloudwatch-agent-role"
+resource "aws_iam_role" "cloudwatch_agent_role" {
+  name = "eks-cloudwatch-agent-role"
 
-#   assume_role_policy = jsonencode({
-#     Version = "2012-10-17",
-#     Statement = [{
-#       Effect = "Allow",
-#       Action = "sts:AssumeRoleWithWebIdentity",
-#       Principal = {
-#         Federated = aws_iam_openid_connect_provider.eks.arn
-#       },
-#       Condition = {
-#         StringEquals = {
-#           "${replace(aws_iam_openid_connect_provider.eks.url,"https://","")}:sub" = "system:serviceaccount:amazon-cloudwatch:cloudwatch-agent"
-#           "${replace(aws_iam_openid_connect_provider.eks.url,"https://","")}:aud" = "sts.amazonaws.com"
-#         }
-#       }
-#     }]
-#   })
-# }
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Action = "sts:AssumeRoleWithWebIdentity",
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.eks.arn
+      },
+      Condition = {
+        StringEquals = {
+          "${replace(aws_iam_openid_connect_provider.eks.url,"https://","")}:sub" = "system:serviceaccount:amazon-cloudwatch:cloudwatch-agent"
+          "${replace(aws_iam_openid_connect_provider.eks.url,"https://","")}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+}
 
-# resource "aws_iam_role_policy_attachment" "cloudwatch_agent_attach" {
-#   role       = aws_iam_role.cloudwatch_agent_role.name
-#   policy_arn = aws_iam_policy.cloudwatch_agent_policy.arn
-# }
+resource "aws_iam_role_policy_attachment" "cloudwatch_agent_attach" {
+  role       = aws_iam_role.cloudwatch_agent_role.name
+  policy_arn = aws_iam_policy.cloudwatch_agent_policy.arn
+}
 
-# resource "kubernetes_service_account" "cloudwatch_agent" {
-#   metadata {
-#     name      = "cloudwatch-agent"
-#     namespace = "amazon-cloudwatch"
-#     annotations = {
-#       "eks.amazonaws.com/role-arn" = aws_iam_role.cloudwatch_agent_role.arn
-#     }
-#   }
-#   depends_on = [aws_eks_cluster.this]
-# }
+resource "kubernetes_service_account" "cloudwatch_agent" {
+  metadata {
+    name      = "cloudwatch-agent"
+    namespace = "amazon-cloudwatch"
+    annotations = {
+      "eks.amazonaws.com/role-arn" = aws_iam_role.cloudwatch_agent_role.arn
+    }
+  }
+  depends_on = [aws_eks_cluster.this]
+}
 
-# resource "aws_eks_addon" "cloudwatch_agent" {
-#   cluster_name = aws_eks_cluster.this.name
-#   addon_name   = "amazon-cloudwatch-observability"
-#   addon_version = "v4.7.0-eksbuild.1"
-#   service_account_role_arn = aws_iam_role.cloudwatch_agent_role.arn
-#   depends_on = [aws_eks_cluster.this]
-# }
+resource "aws_eks_addon" "cloudwatch_agent" {
+  cluster_name = aws_eks_cluster.this.name
+  addon_name   = "amazon-cloudwatch-observability"
+  addon_version = "v4.7.0-eksbuild.1"
+  service_account_role_arn = aws_iam_role.cloudwatch_agent_role.arn
+  depends_on = [aws_eks_cluster.this]
+}
