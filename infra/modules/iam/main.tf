@@ -418,3 +418,4 @@ resource "aws_iam_role_policy_attachment" "flask_app_attach" {
   role       = aws_iam_role.flask_app_role.name
   policy_arn = aws_iam_policy.flask_app_secrets_policy.arn
 }
+

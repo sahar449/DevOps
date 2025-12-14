@@ -6,6 +6,12 @@ app:
     repository: null
     tag: latest
     pullPolicy: Always
+  podAnnotations:
+    instrumentation.opentelemetry.io/inject-python: "false"   # Disable Python auto-instrumentation
+    instrumentation.opentelemetry.io/inject-java: "false"     # Disable Java auto-instrumentation
+    instrumentation.opentelemetry.io/inject-nodejs: "false"   # Disable Node.js auto-instrumentation
+    instrumentation.opentelemetry.io/inject-dotnet: "false"   # Disable .NET auto-instrumentation
+
 service:
   type: ClusterIP
   port: 5000

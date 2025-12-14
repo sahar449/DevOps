@@ -8,7 +8,6 @@ resource "random_string" "suffix" {
 # IAM Role for EKS Cluster
 resource "aws_iam_role" "eks_cluster_role" {
   name = "${var.cluster_name}-eks-cluster-role-${random_string.suffix.result}"
-
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -19,7 +18,6 @@ resource "aws_iam_role" "eks_cluster_role" {
       }
     }]
   })
-
 }
 
 # IAM Role Policy Attachment for EKS Cluster
@@ -32,13 +30,11 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_AmazonEKSClusterPolicy" {
 resource "aws_eks_cluster" "this" {
   name     = var.cluster_name
   role_arn = aws_iam_role.eks_cluster_role.arn
-
+  version = "1.34"
   vpc_config {
     subnet_ids = var.private_subnet_ids
   }
-
   depends_on = [aws_iam_role.eks_cluster_role]
-
   lifecycle {
     ignore_changes = [
       name
@@ -49,7 +45,6 @@ resource "aws_eks_cluster" "this" {
 # IAM Role for Worker Nodes
 resource "aws_iam_role" "node_group_role" {
   name = "${var.cluster_name}-eks-nodegroup-role-${random_string.suffix.result}"
-
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -84,13 +79,11 @@ resource "aws_eks_node_group" "private_nodes" {
   node_group_name = "${var.cluster_name}-ng-${random_string.suffix.result}"
   node_role_arn   = aws_iam_role.node_group_role.arn
   subnet_ids      = var.private_subnet_ids
-
   scaling_config {
     desired_size = 2
     max_size     = 4
     min_size     = 2
   }
-
   instance_types = ["t3.medium"]
 }
 
@@ -109,18 +102,101 @@ resource "aws_security_group" "eks_nodes" {
   name        = "${var.cluster_name}-eks-nodes"
   description = "Security group for EKS nodes"
   vpc_id      = var.vpc_id
-
   ingress {
     from_port   = 0
     to_port     = 65535
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+}
+
+#######################################
+# CloudWatch Observability - IAM Policy
+#######################################
+resource "aws_iam_policy" "cloudwatch_observability_policy" {
+  name        = "CloudWatchObservabilityPolicy-${random_string.suffix.result}"
+  description = "IAM policy for CloudWatch Observability addon"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ],
+        Resource = "*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "cloudwatch:PutMetricData",
+          "ec2:DescribeVolumes",
+          "ec2:DescribeTags",
+          "ec2:DescribeInstances",
+          "ec2:DescribeInstanceStatus"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+#######################################
+# CloudWatch Observability - IAM Role
+#######################################
+#######################################
+# CloudWatch Observability - IAM Role
+#######################################
+resource "aws_iam_role" "cloudwatch_observability_role" {
+  name = "eks-cloudwatch-observability-role-${random_string.suffix.result}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Action = "sts:AssumeRoleWithWebIdentity",
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.eks.arn
+      },
+      Condition = {
+        StringEquals = {
+          # ✅ שני Service Accounts!
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = [
+            "system:serviceaccount:amazon-cloudwatch:cloudwatch-agent",
+            "system:serviceaccount:amazon-cloudwatch:fluent-bit"
+          ]
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+}
+resource "aws_iam_role_policy_attachment" "cloudwatch_observability_attach" {
+  role       = aws_iam_role.cloudwatch_observability_role.name
+  policy_arn = aws_iam_policy.cloudwatch_observability_policy.arn
+}
+
+#######################################
+# CloudWatch Observability - EKS Addon (אחד בלבד!)
+#######################################
+resource "aws_eks_addon" "cloudwatch_observability" {
+  cluster_name             = aws_eks_cluster.this.name
+  addon_name               = "amazon-cloudwatch-observability"
+  addon_version            = "v5.0.0-eksbuild.1"
+  service_account_role_arn = aws_iam_role.cloudwatch_observability_role.arn
+  
+  depends_on = [
+    aws_eks_node_group.private_nodes,
+    aws_iam_role_policy_attachment.cloudwatch_observability_attach
+  ]
 }

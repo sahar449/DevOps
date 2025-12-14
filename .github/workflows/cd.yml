@@ -34,7 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply') ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'  &&
+      github.event.workflow_run.head_branch == 'cloudwatch')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -93,11 +94,9 @@ jobs:
             --query "Vpcs[0].VpcId" --output text)
           export ECR_NAME=${{ secrets.ECR_NAME }}
           export AWS_ACCOUNT_NUMBER=${{ secrets.AWS_ACCOUNT_NUMBER }}
-          export PROM_PASS=${{ secrets.PROM_PASS}}
           envsubst < ArgoCD/externalCharts/alb_dns.yaml | kubectl apply -f -
           envsubst < ArgoCD/externalCharts/secrets.yaml | kubectl apply -f -
           envsubst < ArgoCD/myChart/argo.yaml | kubectl apply -f -
-          envsubst < ArgoCD/monitoring/prom.yaml | kubectl apply -f -
           sleep 10
           kubectl get applications -n argocd
 
