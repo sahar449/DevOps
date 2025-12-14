@@ -5,6 +5,7 @@ on:
     workflows: ["Bootstrap Infra"]
     types:
       - completed
+  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -20,8 +21,9 @@ jobs:
   trivy-scan:
     if: >
       ${{
-        github.event.workflow_run.conclusion == 'success' &&
-        contains(github.event.workflow_run.display_title, 'apply')
+        github.event_name == 'workflow_dispatch' ||
+        (github.event.workflow_run.conclusion == 'success' &&
+        contains(github.event.workflow_run.display_title, 'apply'))
       }}
     runs-on: ubuntu-latest
     steps:
