@@ -26,8 +26,8 @@ ingress:
     alb.ingress.kubernetes.io/tags: ManagedBy=argocd,Application=flask-app,Environment=production
     external-dns.alpha.kubernetes.io/hostname: www.saharbittman.com
     alb.ingress.kubernetes.io/load-balancer-name: eksdemo-flask-alb
-    alb.ingress.kubernetes.io/load-balancer-attributes: deletion_protection.enabled=false
-    alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=10
+    alb.ingress.kubernetes.io/load-balancer-attributes: routing.http.xff_client_port.enabled=true,routing.http2.enabled=true
+
   hosts:
     - host: www.saharbittman.com
       paths:
