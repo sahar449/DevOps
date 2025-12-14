@@ -249,7 +249,7 @@ resource "aws_eks_addon" "fluent_bit" {
   service_account_role_arn = aws_iam_role.fluent_bit_role.arn
   
   depends_on = [
-    aws_eks_node_group.this,
+    aws_eks_node_group.private_nodes,
     aws_iam_role_policy_attachment.fluent_bit_attach
   ]
 }
