@@ -21,23 +21,26 @@ DB_PORT = 3306
 @app.route("/health")
 def health():
     """Health check endpoint with detailed logging"""
-    # בדוק את כל ה-headers
+    
     x_forwarded_for = request.headers.get('X-Forwarded-For', '')
     x_real_ip = request.headers.get('X-Real-IP', '')
-    remote_addr = request.remote_addr
+    x_forwarded_proto = request.headers.get('X-Forwarded-Proto', '')
+    x_forwarded_port = request.headers.get('X-Forwarded-Port', '')
     
-    # קח את הראשון מהרשימה אם יש
+    all_headers = dict(request.headers)
+    
+    # קח את ה-IP
     if x_forwarded_for:
         client_ip = x_forwarded_for.split(',')[0].strip()
-    elif x_real_ip:
-        client_ip = x_real_ip
     else:
-        client_ip = remote_addr
+        client_ip = request.remote_addr
     
     user_agent = request.headers.get('User-Agent', 'Unknown')
     
-    # DEBUG - תראה את כל ה-headers
-    logger.info(f"Health check - IP: {client_ip} | User-Agent: {user_agent} | X-Forwarded-For: {x_forwarded_for} | Remote: {remote_addr}")
+    # DEBUG - הדפס את כל ה-headers פעם אחת
+    logger.info(f"All headers: {all_headers}")
+    logger.info(f"Health check - IP: {client_ip} | User-Agent: {user_agent}")
+    
     return "OK", 200
 
 # Only initialize DB if secrets exist

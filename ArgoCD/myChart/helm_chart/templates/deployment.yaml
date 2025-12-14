@@ -14,6 +14,14 @@ spec:
     metadata:
       labels:
         app: {{ .Values.app.name }}
+      # Annotations are metadata attached to pods (not used for selection)
+      # These disable OpenTelemetry auto-instrumentation to prevent unwanted init containers
+      {{- if .Values.app.podAnnotations }}       # Check if podAnnotations are defined in values.yaml
+      annotations:
+        {{- range $key, $value := .Values.app.podAnnotations }}  # Loop through each annotation
+        {{ $key }}: {{ $value | quote }}         # Add annotation key-value pair (e.g., "instrumentation.opentelemetry.io/inject-python: false")
+        {{- end }}
+      {{- end }}
     spec:
       serviceAccountName: {{ .Values.secrets.serviceAccountName }} 
       containers:
