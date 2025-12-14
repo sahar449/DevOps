@@ -34,7 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply') ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'  &&
+      github.event.workflow_run.head_branch == 'cloudwatch')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
