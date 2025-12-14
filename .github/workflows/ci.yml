@@ -5,12 +5,6 @@ on:
     workflows: ["Bootstrap Infra"]
     types:
       - completed
-  workflow_dispatch:
-    inputs:
-      reason:
-        description: 'Reason for manual run'
-        required: false
-        default: 'Manual trigger'
 
 permissions:
   id-token: write
