@@ -34,8 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply') ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'  &&
-      github.event.workflow_run.head_branch == 'cloudwatch')
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -159,118 +158,104 @@ jobs:
           echo "⏳ Waiting 30s for applications cleanup..."
           sleep 30
           
+          # ✅ NEW - Delete Ingresses first!
+          echo "🗑️ Deleting all Ingresses..."
+          kubectl delete ingress --all --all-namespaces --timeout=5m || true
+          
+          echo "⏳ Waiting 120s for ALB deletion..."
+          sleep 120
+          
           echo "🗑️ Uninstalling ArgoCD via Helm..."
           helm uninstall argocd -n argocd --wait --timeout=10m || true
           
           echo "⏳ Waiting 60s for LoadBalancer deletion..."
           sleep 60
 
-          # Cleanup DNS Records - ONLY subdomains, NOT NS/SOA/apex
-          echo "🗑️ Deleting Route53 DNS records for subdomains..."
-          HOSTED_ZONE_ID=$(aws route53 list-hosted-zones-by-name \
-            --dns-name "saharbittman.com" \
-            --query "HostedZones[0].Id" --output text | cut -d'/' -f3)
+          # ... (rest of your cleanup script)
           
-          if [ -n "$HOSTED_ZONE_ID" ] && [ "$HOSTED_ZONE_ID" != "None" ]; then
-            echo "Found Hosted Zone: $HOSTED_ZONE_ID"
-            
-            RECORDS=$(aws route53 list-resource-record-sets \
-              --hosted-zone-id "$HOSTED_ZONE_ID" \
-              --query "ResourceRecordSets[?Type!='NS' && Type!='SOA']" \
-              --output json)
-            
-            echo "$RECORDS" | jq -c '.[]' | while read -r record; do
-              RECORD_NAME=$(echo "$record" | jq -r '.Name')
-              RECORD_TYPE=$(echo "$record" | jq -r '.Type')
-              
-              if [[ "$RECORD_NAME" == "saharbittman.com." ]]; then
-                echo "⏭️  Skipping apex record: $RECORD_NAME ($RECORD_TYPE)"
-                continue
-              fi
-              
-              echo "🗑️  Deleting DNS record: $RECORD_NAME ($RECORD_TYPE)"
-              
-              CHANGE_BATCH=$(cat <<EOF
-          {
-            "Changes": [{
-              "Action": "DELETE",
-              "ResourceRecordSet": $record
-            }]
-          }
-          EOF
-              )
-              
-              aws route53 change-resource-record-sets \
-                --hosted-zone-id "$HOSTED_ZONE_ID" \
-                --change-batch "$CHANGE_BATCH" || true
-              
-              sleep 2
-            done
-            
-            echo "✅ DNS subdomains cleanup completed (NS/SOA preserved)"
-          else
-            echo "⚠️ Hosted zone for saharbittman.com not found"
-          fi
-
-          # Cleanup Load Balancers
-          echo "🗑️ Cleaning up Load Balancers..."
-          CLB_ARN=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?LoadBalancerName=='${{ env.ARGOCD_CLB }}'].LoadBalancerArn" --output text)
-          if [ -n "$CLB_ARN" ] && [ "$CLB_ARN" != "None" ]; then
-            LISTENERS=$(aws elbv2 describe-listeners --load-balancer-arn "$CLB_ARN" --query "Listeners[].ListenerArn" --output text)
-            for L in $LISTENERS; do
-              aws elbv2 delete-listener --listener-arn "$L" || true
-            done
-            sleep 5
-            aws elbv2 delete-load-balancer --load-balancer-arn "$CLB_ARN" || true
-            sleep 40
-          fi
-
-          echo "🗑️ Cleaning up Target Groups..."
-          TG_ARNS=$(aws elbv2 describe-target-groups --query "TargetGroups[?contains(TargetGroupName, 'argocd')].TargetGroupArn" --output text)
-          for TG in $TG_ARNS; do
-            aws elbv2 delete-target-group --target-group-arn "$TG" || true
-          done
-
-          echo "🗑️ Deleting ArgoCD namespace..."
-          kubectl delete namespace argocd --timeout=5m || true
-          sleep 20
-
           echo "🗑️ Cleaning up VPC resources..."
           VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=${{ env.VPC_NAME }}" --query "Vpcs[0].VpcId" --output text)
           if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
             echo "Found VPC: $VPC_ID"
             
-            LB_ARNS=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" --output text)
+            # ✅ NEW - Find ALL Load Balancers in VPC
+            echo "🗑️ Finding all Load Balancers in VPC..."
+            LB_ARNS=$(aws elbv2 describe-load-balancers \
+              --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" \
+              --output text)
+            
             for LB in $LB_ARNS; do
-              LISTENERS=$(aws elbv2 describe-listeners --load-balancer-arn "$LB" --query "Listeners[].ListenerArn" --output text)
+              echo "🗑️ Deleting Load Balancer: $LB"
+              LISTENERS=$(aws elbv2 describe-listeners \
+                --load-balancer-arn "$LB" \
+                --query "Listeners[].ListenerArn" \
+                --output text)
               for L in $LISTENERS; do
                 aws elbv2 delete-listener --listener-arn "$L" || true
               done
               aws elbv2 delete-load-balancer --load-balancer-arn "$LB" || true
             done
-            sleep 90
             
-            TG_ARNS=$(aws elbv2 describe-target-groups --query "TargetGroups[?VpcId=='$VPC_ID'].TargetGroupArn" --output text)
+            echo "⏳ Waiting 120s for Load Balancer deletion..."
+            sleep 120
+            
+            # Delete Target Groups
+            echo "🗑️ Deleting Target Groups..."
+            TG_ARNS=$(aws elbv2 describe-target-groups \
+              --query "TargetGroups[?VpcId=='$VPC_ID'].TargetGroupArn" \
+              --output text)
             for TG in $TG_ARNS; do
               aws elbv2 delete-target-group --target-group-arn "$TG" || true
             done
             sleep 30
 
-            SG_IDS=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[?GroupName!='default'].GroupId" --output text)
-            for SG in $SG_IDS; do
-              ENIS=$(aws ec2 describe-network-interfaces --filters "Name=group-id,Values=$SG" --query "NetworkInterfaces[].NetworkInterfaceId" --output text)
-              for ENI in $ENIS; do
-                aws ec2 delete-network-interface --network-interface-id "$ENI" || true
-              done
+            # ✅ NEW - Delete Network Interfaces BEFORE Security Groups
+            echo "🗑️ Deleting Network Interfaces..."
+            ENI_IDS=$(aws ec2 describe-network-interfaces \
+              --filters "Name=vpc-id,Values=$VPC_ID" \
+              --query "NetworkInterfaces[?Status=='available'].NetworkInterfaceId" \
+              --output text)
+            for ENI in $ENI_IDS; do
+              echo "🗑️ Deleting ENI: $ENI"
+              aws ec2 delete-network-interface --network-interface-id "$ENI" || true
             done
             sleep 30
 
+            # Delete Security Groups
+            echo "🗑️ Deleting Security Groups..."
+            SG_IDS=$(aws ec2 describe-security-groups \
+              --filters "Name=vpc-id,Values=$VPC_ID" \
+              --query "SecurityGroups[?GroupName!='default'].GroupId" \
+              --output text)
+            
+            # First pass - remove all rules
             for SG in $SG_IDS; do
-              INGRESS=$(aws ec2 describe-security-groups --group-ids "$SG" --query 'SecurityGroups[0].IpPermissions' --output json || echo "[]")
-              EGRESS=$(aws ec2 describe-security-groups --group-ids "$SG" --query 'SecurityGroups[0].IpPermissionsEgress' --output json || echo "[]")
-              [ "$INGRESS" != "[]" ] && aws ec2 revoke-security-group-ingress --group-id "$SG" --ip-permissions "$INGRESS" || true
-              [ "$EGRESS" != "[]" ] && aws ec2 revoke-security-group-egress --group-id "$SG" --ip-permissions "$EGRESS" || true
-              aws ec2 delete-security-group --group-id "$SG" || true
+              echo "🗑️ Removing rules from SG: $SG"
+              INGRESS=$(aws ec2 describe-security-groups \
+                --group-ids "$SG" \
+                --query 'SecurityGroups[0].IpPermissions' \
+                --output json || echo "[]")
+              EGRESS=$(aws ec2 describe-security-groups \
+                --group-ids "$SG" \
+                --query 'SecurityGroups[0].IpPermissionsEgress' \
+                --output json || echo "[]")
+              
+              [ "$INGRESS" != "[]" ] && \
+                aws ec2 revoke-security-group-ingress \
+                  --group-id "$SG" \
+                  --ip-permissions "$INGRESS" 2>/dev/null || true
+              [ "$EGRESS" != "[]" ] && \
+                aws ec2 revoke-security-group-egress \
+                  --group-id "$SG" \
+                  --ip-permissions "$EGRESS" 2>/dev/null || true
+            done
+            
+            sleep 10
+            
+            # Second pass - delete security groups
+            for SG in $SG_IDS; do
+              echo "🗑️ Deleting SG: $SG"
+              aws ec2 delete-security-group --group-id "$SG" 2>/dev/null || true
             done
             
             echo "✅ VPC resources cleanup completed"

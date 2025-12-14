@@ -94,9 +94,9 @@ jobs:
           cd infra
           terraform destroy -auto-approve
 
-      # - name: Destroy on failure
-      #   if: ${{ failure() && github.event.inputs.action == 'apply' }}
-      #   run: |
-      #     echo "Terraform Apply FAILED — running destroy!"
-      #     cd infra
-      #     terraform destroy -auto-approve
+      - name: Destroy on failure
+        if: ${{ failure() && github.event.inputs.action == 'apply' }}
+        run: |
+          echo "Terraform Apply FAILED — running destroy!"
+          cd infra
+          terraform destroy -auto-approve
