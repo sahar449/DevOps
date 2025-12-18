@@ -29,6 +29,7 @@ ingress:
     alb.ingress.kubernetes.io/load-balancer-name: eksdemo-flask-alb
     alb.ingress.kubernetes.io/load-balancer-attributes: deletion_protection.enabled=false
     alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=10
+    alb.ingress.kubernetes.io/load-balancer-attributes: routing.http.xff_client_port.enabled=true 
   hosts:
     - host: www.saharbittman.com
       paths:

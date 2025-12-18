@@ -1,5 +1,5 @@
-# app.py
 from flask import Flask, jsonify, request
+from werkzeug.middleware.proxy_fix import ProxyFix
 import pymysql
 import os
 import time
@@ -14,34 +14,55 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+app.wsgi_app = ProxyFix(
+    app.wsgi_app,
+    x_for=1,
+    x_proto=1,
+    x_host=1,
+    x_prefix=1
+)
+
 SECRET_PATH = "/mnt/rds-secret"
 DB_PORT = 3306
 
-# Health check WITHOUT DB dependency
 @app.route("/health")
 def health():
-    """Health check endpoint with detailed logging"""
+    """Health check endpoint with detailed IP logging"""
     
     x_forwarded_for = request.headers.get('X-Forwarded-For', '')
     x_real_ip = request.headers.get('X-Real-IP', '')
     x_forwarded_proto = request.headers.get('X-Forwarded-Proto', '')
     x_forwarded_port = request.headers.get('X-Forwarded-Port', '')
+    remote_addr = request.remote_addr
+    user_agent = request.headers.get('User-Agent', 'Unknown')
     
-    all_headers = dict(request.headers)
-    
-    # קח את ה-IP
     if x_forwarded_for:
         client_ip = x_forwarded_for.split(',')[0].strip()
     else:
-        client_ip = request.remote_addr
+        client_ip = remote_addr
     
-    user_agent = request.headers.get('User-Agent', 'Unknown')
+    logger.info(f"=== Health Check Request ===")
+    logger.info(f"Client IP (determined): {client_ip}")
+    logger.info(f"X-Forwarded-For: {x_forwarded_for or 'Not set'}")
+    logger.info(f"X-Real-IP: {x_real_ip or 'Not set'}")
+    logger.info(f"X-Forwarded-Proto: {x_forwarded_proto or 'Not set'}")
+    logger.info(f"X-Forwarded-Port: {x_forwarded_port or 'Not set'}")
+    logger.info(f"request.remote_addr: {remote_addr}")
+    logger.info(f"User-Agent: {user_agent}")
+    logger.info(f"All headers: {dict(request.headers)}")
     
-    # DEBUG - הדפס את כל ה-headers פעם אחת
-    logger.info(f"All headers: {all_headers}")
-    logger.info(f"Health check - IP: {client_ip} | User-Agent: {user_agent}")
-    
-    return "OK", 200
+    return jsonify({
+        "status": "OK",
+        "client_ip": client_ip,
+        "timestamp": datetime.now().isoformat(),
+        "headers": {
+            "x_forwarded_for": x_forwarded_for or None,
+            "x_real_ip": x_real_ip or None,
+            "remote_addr": remote_addr,
+            "x_forwarded_proto": x_forwarded_proto or None
+        }
+    }), 200
 
 # Only initialize DB if secrets exist
 def init_with_db():
