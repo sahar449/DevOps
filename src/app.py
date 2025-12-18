@@ -28,41 +28,8 @@ DB_PORT = 3306
 
 @app.route("/health")
 def health():
-    """Health check endpoint with detailed IP logging"""
-    
-    x_forwarded_for = request.headers.get('X-Forwarded-For', '')
-    x_real_ip = request.headers.get('X-Real-IP', '')
-    x_forwarded_proto = request.headers.get('X-Forwarded-Proto', '')
-    x_forwarded_port = request.headers.get('X-Forwarded-Port', '')
-    remote_addr = request.remote_addr
-    user_agent = request.headers.get('User-Agent', 'Unknown')
-    
-    if x_forwarded_for:
-        client_ip = x_forwarded_for.split(',')[0].strip()
-    else:
-        client_ip = remote_addr
-    
-    logger.info(f"=== Health Check Request ===")
-    logger.info(f"Client IP (determined): {client_ip}")
-    logger.info(f"X-Forwarded-For: {x_forwarded_for or 'Not set'}")
-    logger.info(f"X-Real-IP: {x_real_ip or 'Not set'}")
-    logger.info(f"X-Forwarded-Proto: {x_forwarded_proto or 'Not set'}")
-    logger.info(f"X-Forwarded-Port: {x_forwarded_port or 'Not set'}")
-    logger.info(f"request.remote_addr: {remote_addr}")
-    logger.info(f"User-Agent: {user_agent}")
-    logger.info(f"All headers: {dict(request.headers)}")
-    
-    return jsonify({
-        "status": "OK",
-        "client_ip": client_ip,
-        "timestamp": datetime.now().isoformat(),
-        "headers": {
-            "x_forwarded_for": x_forwarded_for or None,
-            "x_real_ip": x_real_ip or None,
-            "remote_addr": remote_addr,
-            "x_forwarded_proto": x_forwarded_proto or None
-        }
-    }), 200
+    """Health check endpoint"""
+    return jsonify({"status": "OK"}), 200
 
 # Only initialize DB if secrets exist
 def init_with_db():
