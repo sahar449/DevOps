@@ -116,83 +116,83 @@ resource "aws_security_group" "eks_nodes" {
   }
 }
 
-#######################################
-# CloudWatch Observability - IAM Policy
-#######################################
-resource "aws_iam_policy" "cloudwatch_observability_policy" {
-  name        = "CloudWatchObservabilityPolicy-${random_string.suffix.result}"
-  description = "IAM policy for CloudWatch Observability addon"
+# #######################################
+# # CloudWatch Observability - IAM Policy
+# #######################################
+# resource "aws_iam_policy" "cloudwatch_observability_policy" {
+#   name        = "CloudWatchObservabilityPolicy-${random_string.suffix.result}"
+#   description = "IAM policy for CloudWatch Observability addon"
 
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect = "Allow",
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents",
-          "logs:DescribeLogStreams"
-        ],
-        Resource = "*"
-      },
-      {
-        Effect = "Allow",
-        Action = [
-          "cloudwatch:PutMetricData",
-          "ec2:DescribeVolumes",
-          "ec2:DescribeTags",
-          "ec2:DescribeInstances",
-          "ec2:DescribeInstanceStatus"
-        ],
-        Resource = "*"
-      }
-    ]
-  })
-}
+#   policy = jsonencode({
+#     Version = "2012-10-17",
+#     Statement = [
+#       {
+#         Effect = "Allow",
+#         Action = [
+#           "logs:CreateLogGroup",
+#           "logs:CreateLogStream",
+#           "logs:PutLogEvents",
+#           "logs:DescribeLogStreams"
+#         ],
+#         Resource = "*"
+#       },
+#       {
+#         Effect = "Allow",
+#         Action = [
+#           "cloudwatch:PutMetricData",
+#           "ec2:DescribeVolumes",
+#           "ec2:DescribeTags",
+#           "ec2:DescribeInstances",
+#           "ec2:DescribeInstanceStatus"
+#         ],
+#         Resource = "*"
+#       }
+#     ]
+#   })
+# }
 
-#######################################
-# CloudWatch Observability - IAM Role
-#######################################
-resource "aws_iam_role" "cloudwatch_observability_role" {
-  name = "eks-cloudwatch-observability-role-${random_string.suffix.result}"
+# #######################################
+# # CloudWatch Observability - IAM Role
+# #######################################
+# resource "aws_iam_role" "cloudwatch_observability_role" {
+#   name = "eks-cloudwatch-observability-role-${random_string.suffix.result}"
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Effect = "Allow",
-      Action = "sts:AssumeRoleWithWebIdentity",
-      Principal = {
-        Federated = aws_iam_openid_connect_provider.eks.arn
-      },
-      Condition = {
-        StringEquals = {
-          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = [
-            "system:serviceaccount:amazon-cloudwatch:cloudwatch-agent",
-            "system:serviceaccount:amazon-cloudwatch:fluent-bit"
-          ]
-          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
-        }
-      }
-    }]
-  })
-}
-resource "aws_iam_role_policy_attachment" "cloudwatch_observability_attach" {
-  role       = aws_iam_role.cloudwatch_observability_role.name
-  policy_arn = aws_iam_policy.cloudwatch_observability_policy.arn
-}
+#   assume_role_policy = jsonencode({
+#     Version = "2012-10-17",
+#     Statement = [{
+#       Effect = "Allow",
+#       Action = "sts:AssumeRoleWithWebIdentity",
+#       Principal = {
+#         Federated = aws_iam_openid_connect_provider.eks.arn
+#       },
+#       Condition = {
+#         StringEquals = {
+#           "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = [
+#             "system:serviceaccount:amazon-cloudwatch:cloudwatch-agent",
+#             "system:serviceaccount:amazon-cloudwatch:fluent-bit"
+#           ]
+#           "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
+#         }
+#       }
+#     }]
+#   })
+# }
+# resource "aws_iam_role_policy_attachment" "cloudwatch_observability_attach" {
+#   role       = aws_iam_role.cloudwatch_observability_role.name
+#   policy_arn = aws_iam_policy.cloudwatch_observability_policy.arn
+# }
 
-#######################################
-# CloudWatch Observability - EKS Addon 
-#######################################
-resource "aws_eks_addon" "cloudwatch_observability" {
-  cluster_name             = aws_eks_cluster.this.name
-  addon_name               = "amazon-cloudwatch-observability"
-  addon_version            = "v5.0.0-eksbuild.1"
-  service_account_role_arn = aws_iam_role.cloudwatch_observability_role.arn
+# #######################################
+# # CloudWatch Observability - EKS Addon 
+# #######################################
+# resource "aws_eks_addon" "cloudwatch_observability" {
+#   cluster_name             = aws_eks_cluster.this.name
+#   addon_name               = "amazon-cloudwatch-observability"
+#   addon_version            = "v5.0.0-eksbuild.1"
+#   service_account_role_arn = aws_iam_role.cloudwatch_observability_role.arn
   
-  depends_on = [
-    aws_eks_node_group.private_nodes,
-    aws_iam_role_policy_attachment.cloudwatch_observability_attach
-  ]
-}
+#   depends_on = [
+#     aws_eks_node_group.private_nodes,
+#     aws_iam_role_policy_attachment.cloudwatch_observability_attach
+#   ]
+# }
