@@ -154,9 +154,6 @@ resource "aws_iam_policy" "cloudwatch_observability_policy" {
 #######################################
 # CloudWatch Observability - IAM Role
 #######################################
-#######################################
-# CloudWatch Observability - IAM Role
-#######################################
 resource "aws_iam_role" "cloudwatch_observability_role" {
   name = "eks-cloudwatch-observability-role-${random_string.suffix.result}"
 
@@ -170,7 +167,6 @@ resource "aws_iam_role" "cloudwatch_observability_role" {
       },
       Condition = {
         StringEquals = {
-          # ✅ שני Service Accounts!
           "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = [
             "system:serviceaccount:amazon-cloudwatch:cloudwatch-agent",
             "system:serviceaccount:amazon-cloudwatch:fluent-bit"
@@ -187,7 +183,7 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_observability_attach" {
 }
 
 #######################################
-# CloudWatch Observability - EKS Addon (אחד בלבד!)
+# CloudWatch Observability - EKS Addon 
 #######################################
 resource "aws_eks_addon" "cloudwatch_observability" {
   cluster_name             = aws_eks_cluster.this.name
