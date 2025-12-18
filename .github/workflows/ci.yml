@@ -117,13 +117,13 @@ jobs:
           sleep 5
 
           for i in $(seq 1 50); do
-            RESPONSE=$(curl -s http://localhost:5000/health || true)
-            if [ "$RESPONSE" = "OK" ]; then
+            STATUS=$(curl -s http://localhost:5000/health | jq -r '.status' 2>/dev/null || echo "FAIL")
+            if [ "$STATUS" = "OK" ]; then
               echo "✅ Smoke test passed."
               docker rm -f test-container
               exit 0
             fi
-            echo "⚠️ Attempt $i failed — got: '$RESPONSE'"
+            echo "⚠️ Attempt $i failed — got status: '$STATUS'"
             sleep 5
           done
 

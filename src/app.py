@@ -15,13 +15,7 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-app.wsgi_app = ProxyFix(
-    app.wsgi_app,
-    x_for=1,
-    x_proto=1,
-    x_host=1,
-    x_prefix=1
-)
+
 
 SECRET_PATH = "/mnt/rds-secret"
 DB_PORT = 3306
