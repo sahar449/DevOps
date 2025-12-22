@@ -102,7 +102,6 @@ jobs:
           --namespace monitoring \
           --create-namespace \
           --version 67.4.0 \
-          -f ArgoCD/monitoring/values.yaml \
           --set grafana.enabled=true \
           --set grafana.adminPassword="${{ secrets.GRAFANA_PASS }}" \
           --set alertmanager.config.global.smtp_auth_password="${{ secrets.GOOGLE_SECRET_PROM }}" \
@@ -140,8 +139,8 @@ jobs:
       - name: Get VPCID, Secrets and Deploy Apps
         run: |
           export VPC_ID=$(aws ec2 describe-vpcs \
-            --filters "Name=tag:Name,Values=${{ env.VPC_NAME }}" \
-            --query "Vpcs[0].VpcId" --output text)
+          --filters "Name=tag:Name,Values=${{ env.VPC_NAME }}" \
+          --query "Vpcs[0].VpcId" --output text)
           export ECR_NAME=${{ secrets.ECR_NAME }}
           export AWS_ACCOUNT_NUMBER=${{ secrets.AWS_ACCOUNT_NUMBER }}
           export GOOGLE_SECRET_PROM=${{ secrets.GOOGLE_SECRET_PROM }}
@@ -152,8 +151,7 @@ jobs:
           envsubst < ArgoCD/externalCharts/secrets.yaml | kubectl apply -f -
           envsubst < ArgoCD/myChart/argo.yaml | kubectl apply -f -
           envsubst < ArgoCD/monitoring/argo.yaml | kubectl apply -f -
-          envsubst < ArgoCD/monitoring/values.yaml | kubectl apply -f -
-          
+                      
           echo "⏳ Waiting for applications to sync..."
           sleep 30
           
