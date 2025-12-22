@@ -8,45 +8,57 @@ metadata:
 spec:
   project: default
 
-  source:
-    chart: kube-prometheus-stack
-    repoURL: https://prometheus-community.github.io/helm-charts
-    targetRevision: 67.4.0
-    helm:
-      values: |
-        grafana:
-          enabled: true
-          adminPassword: ${GRAFANA.PASS}
-          service:
-            type: LoadBalancer
-            port: 80
-            annotations:
-              service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+  sources:
+    # Source 1: Prometheus Stack Helm Chart (CRDs מנוהלים ידנית)
+    - chart: kube-prometheus-stack
+      repoURL: https://prometheus-community.github.io/helm-charts
+      targetRevision: 67.4.0
+      helm:
+        values: |
+          crds:
+            create: false       
+          grafana:
+            enabled: true
+            adminPassword: ${GRAFANA.PASS}
+            service:
+              type: LoadBalancer
+              port: 80
+              annotations:
+                service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
 
-        prometheus:
-          prometheusSpec:
-            retention: 30d
-            storageSpec:
-              volumeClaimTemplate:
-                spec:
-                  storageClassName: gp3
-                  accessModes:
-                    - ReadWriteOnce
-                  resources:
-                    requests:
-                      storage: 50Gi
-            resources:
-              requests:
-                cpu: 500m
-                memory: 2Gi
+          prometheus:
+            prometheusSpec:
+              retention: 30d
+              storageSpec:
+                volumeClaimTemplate:
+                  spec:
+                    storageClassName: gp3
+                    accessModes:
+                      - ReadWriteOnce
+                    resources:
+                      requests:
+                        storage: 50Gi
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 2Gi
 
-        alertmanager:
-          enabled: true
-          alertmanagerSpec:
-            resources:
-              requests:
-                cpu: 200m
-                memory: 512Mi
+          alertmanager:
+            enabled: true
+            alertmanagerSpec:
+              resources:
+                requests:
+                  cpu: 200m
+                  memory: 512Mi
+
+    # Source 2: Custom Monitoring Config (AlertManager + Rules)
+    - repoURL: https://github.com/sahar449/DevOps.git
+      targetRevision: HEAD
+      path: ArgoCD/monitoring
+      helm:
+        parameters:
+          - name: alertmanager.password
+            value: "${GOOGLE_SECRET_PROM}"
 
   destination:
     server: https://kubernetes.default.svc
@@ -58,3 +70,10 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

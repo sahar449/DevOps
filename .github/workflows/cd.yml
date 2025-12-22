@@ -66,30 +66,18 @@ jobs:
                   - system:masters
           EOF
 
-      - name: Install Prometheus Operator CRDs (force replace)
+      - name: Install ArgoCD and Prometheus Monitoring
         run: |
-          echo "📦 Installing Prometheus Operator CRDs (force replace)..."
-
-          kubectl replace --force -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_alertmanagerconfigs.yaml
-          kubectl replace --force -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_alertmanagers.yaml
-          kubectl replace --force -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_podmonitors.yaml
-          kubectl replace --force -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_probes.yaml
-          kubectl replace --force -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_prometheuses.yaml
-          kubectl replace --force -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_prometheusrules.yaml
-          kubectl replace --force -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_scrapeconfigs.yaml
-          kubectl replace --force -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
-          kubectl replace --force -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_thanosrulers.yaml
-
-          echo "⏳ Waiting for CRDs to be established..."
-          kubectl wait --for=condition=established crd/prometheuses.monitoring.coreos.com --timeout=120s
-          kubectl wait --for=condition=established crd/alertmanagers.monitoring.coreos.com --timeout=120s
-
-          echo "✅ Prometheus CRDs installed cleanly"
-
-
-      - name: Install ArgoCD
-        run: |
-          helm repo add argo https://argoproj.github.io/argo-helm
+          helm upgrade --install prom prometheus-community/kube-prometheus-stack \
+          --namespace monitoring \
+          --create-namespace \
+          --version 67.4.0 \
+          --set grafana.enabled=true \
+          --set grafana.adminPassword=${{secrets.GRAFANA_PASS}} \
+          --set grafana.service.type=LoadBalancer \
+          --set grafana.service.port=80 \
+          --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-type"=classic \
+          --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing
           helm repo update
           helm upgrade --install argocd argo/argo-cd \
             --namespace argocd \
