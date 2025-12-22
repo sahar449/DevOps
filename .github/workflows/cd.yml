@@ -109,7 +109,9 @@ jobs:
           --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
           --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-name"="grafana" \
           --set prometheus.prometheusSpec.retention=30d \
-          --set alertmanager.enabled=true
+          --set alertmanager.enabled=true \
+          --set alertmanager.existingSecret="alertmanager-prom-stack-kube-prometheus-alertmanager"
+
 
           
           echo "✅ Prometheus Stack installed"
