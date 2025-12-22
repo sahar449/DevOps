@@ -58,8 +58,6 @@ kind: Application
 metadata:
   name: prometheus-custom-config
   namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "2"
 spec:
   project: default
   
@@ -80,8 +78,6 @@ spec:
     automated:
       prune: true
       selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
     retry:
       limit: 3
       backoff:

@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: alertmanager-prometheus-stack-kube-prom-alertmanager
+  name: alertmanager-prom-stack-kube-prometheus-alertmanager
   namespace: monitoring
   annotations:
     argocd.argoproj.io/sync-wave: "1"
