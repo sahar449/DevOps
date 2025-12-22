@@ -104,7 +104,7 @@ jobs:
           --version 67.4.0 \
           -f ArgoCD/monitoring/values.yaml \
           --set grafana.enabled=true \
-          --set alertmanager.alertmanagerSpec.config.global.smtp_auth_password="${{ secrets.GOOGLE_SECRET_PROM }}"
+          --set alertmanager.alertmanagerSpec.config.global.smtp_auth_password="${{ secrets.GOOGLE_SECRET_PROM }}" \
           --set grafana.service.type=LoadBalancer \
           --set grafana.service.port=80 \
           --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
