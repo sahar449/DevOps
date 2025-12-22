@@ -1,0 +1,58 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus-stack
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  sources:
+    # Source 1: Prometheus Stack Helm Chart
+    - chart: kube-prometheus-stack
+      repoURL: https://prometheus-community.github.io/helm-charts
+      targetRevision: 67.4.0
+      helm:
+        values: |
+          grafana:
+            enabled: true
+            adminPassword: ${GRAFANA.PASS}
+            service:
+              type: LoadBalancer
+              port: 80
+              annotations:
+                service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+          
+          prometheus:
+            prometheusSpec:
+              retention: 30d
+          
+          alertmanager:
+            enabled: true
+    
+    # Source 2: Custom Monitoring Config (AlertManager + Rules)
+    - repoURL: https://github.com/sahar449/DevOps.git
+      targetRevision: HEAD
+      path: ArgoCD/monitoring
+      helm:
+        parameters:
+          - name: alertmanager.password
+            value: "${GOOGLE_SECRET_PROM}"
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
