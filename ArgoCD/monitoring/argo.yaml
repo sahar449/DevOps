@@ -9,7 +9,6 @@ spec:
   project: default
   
   sources:
-    # Source 1: Prometheus Stack Helm Chart
     - chart: kube-prometheus-stack
       repoURL: https://prometheus-community.github.io/helm-charts
       targetRevision: 67.4.0
@@ -17,7 +16,7 @@ spec:
         values: |
           grafana:
             enabled: true
-            adminPassword: ${GRAFANA.PASS}
+            adminPassword: "${GRAFANA_PASS}"
             service:
               type: LoadBalancer
               port: 80
@@ -31,7 +30,6 @@ spec:
           alertmanager:
             enabled: true
     
-    # Source 2: Custom Monitoring Config (AlertManager + Rules)
     - repoURL: https://github.com/sahar449/DevOps.git
       targetRevision: HEAD
       path: ArgoCD/monitoring
@@ -50,6 +48,8 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true 
+      - Replace=false
     retry:
       limit: 5
       backoff:
