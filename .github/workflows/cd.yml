@@ -105,7 +105,7 @@ jobs:
           -f ArgoCD/monitoring/values.yaml \
           --set grafana.enabled=true \
           --set grafana.adminPassword="${{ secrets.GRAFANA_PASS }}" \
-          --set alertmanager.alertmanagerSpec.config.global.smtp_auth_password="${{ secrets.GOOGLE_SECRET_PROM }}" \
+          --set alertmanager.config.global.smtp_auth_password="${{ secrets.GOOGLE_SECRET_PROM }}" \
           --set grafana.service.type=LoadBalancer \
           --set grafana.service.port=80 \
           --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
@@ -152,6 +152,7 @@ jobs:
           envsubst < ArgoCD/externalCharts/secrets.yaml | kubectl apply -f -
           envsubst < ArgoCD/myChart/argo.yaml | kubectl apply -f -
           envsubst < ArgoCD/monitoring/argo.yaml | kubectl apply -f -
+          envsubst < ArgoCD/monitoring/values.yaml | kubectl apply -f -
           
           echo "⏳ Waiting for applications to sync..."
           sleep 30
