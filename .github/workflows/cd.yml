@@ -104,11 +104,12 @@ jobs:
           --version 67.4.0 \
           -f ArgoCD/monitoring/values.yaml \
           --set grafana.enabled=true \
+          --set grafana.adminPassword="${{ secrets.GRAFANA_PASS }}" \
           --set alertmanager.alertmanagerSpec.config.global.smtp_auth_password="${{ secrets.GOOGLE_SECRET_PROM }}" \
           --set grafana.service.type=LoadBalancer \
           --set grafana.service.port=80 \
           --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
-          --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-name"="grafana" \
+          --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-name"="${{ env.GRAFANA_CLB }}" \
           --set prometheus.prometheusSpec.retention=30d
 
           echo "✅ Prometheus Stack installed"

@@ -1,5 +1,6 @@
 alertmanager:
   enabled: true
+  password: "${GOOGLE_SECRET_PROM}"
   alertmanagerSpec:
     config:
       global:
