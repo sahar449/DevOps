@@ -101,16 +101,23 @@ jobs:
           helm repo update
           
           helm upgrade --install prom-stack prometheus-community/kube-prometheus-stack \
-            --namespace monitoring \
-            --create-namespace \
-            --version 67.4.0 \
-            --set grafana.enabled=true \
-            --set grafana.adminPassword="${{ secrets.GRAFANA_PASS }}" \
-            --set grafana.service.type=LoadBalancer \
-            --set grafana.service.port=80 \
-            --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
-            --set prometheus.prometheusSpec.retention=30d \
-            --set alertmanager.enabled=true
+          --namespace monitoring \
+          --create-namespace \
+          --version 67.4.0 \
+          --set grafana.enabled=true \
+          --set grafana.adminPassword="${{ secrets.GRAFANA_PASS }}" \
+          --set grafana.service.type=LoadBalancer \
+          --set grafana.service.port=80 \
+          --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
+          --set prometheus.prometheusSpec.retention=30d \
+          --set alertmanager.enabled=true \
+          --set-string grafana.datasources."datasources\.yaml".apiVersion=1 \
+          --set-string grafana.datasources."datasources\.yaml".datasources[0].name=Prometheus \
+          --set-string grafana.datasources."datasources\.yaml".datasources[0].type=prometheus \
+          --set-string grafana.datasources."datasources\.yaml".datasources[0].url="http://prom-stack-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090" \
+          --set-string grafana.datasources."datasources\.yaml".datasources[0].access=proxy \
+          --set grafana.datasources."datasources\.yaml".datasources[0].isDefault=true \
+          --set grafana.datasources."datasources\.yaml".datasources[0].editable=false
           
           echo "✅ Prometheus Stack installed"
           
