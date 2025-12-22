@@ -70,7 +70,7 @@ jobs:
         run: |
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
           helm repo update
-          helm upgrade --install prom prometheus-community/kube-prometheus-stack \
+          helm upgrade --install prom-stack prometheus-community/kube-prometheus-stack \
           --namespace monitoring \
           --create-namespace \
           --version 67.4.0 \
@@ -79,7 +79,11 @@ jobs:
           --set grafana.service.type=LoadBalancer \
           --set grafana.service.port=80 \
           --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-type"=classic \
-          --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing
+          --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
+          --set prometheus.prometheusSpec.replicas=1 \
+          --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName=gp3 \
+          --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage=50Gi
+
           helm repo add argo https://argoproj.github.io/argo-helm
           helm repo update
           helm upgrade --install argocd argo/argo-cd \
