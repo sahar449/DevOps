@@ -109,14 +109,8 @@ jobs:
           --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
           --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-name"="grafana" \
           --set prometheus.prometheusSpec.retention=30d \
-          --set alertmanager.enabled=true \
-          --set grafana.datasources."datasources\.yaml".apiVersion=1 \
-          --set-string grafana.datasources."datasources\.yaml".datasources[0].name=Prometheus \
-          --set-string grafana.datasources."datasources\.yaml".datasources[0].type=prometheus \
-          --set-string grafana.datasources."datasources\.yaml".datasources[0].url="http://prom-stack-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090" \
-          --set-string grafana.datasources."datasources\.yaml".datasources[0].access=proxy \
-          --set grafana.datasources."datasources\.yaml".datasources[0].isDefault=true \
-          --set grafana.datasources."datasources\.yaml".datasources[0].editable=false
+          --set alertmanager.enabled=true
+
           
           echo "✅ Prometheus Stack installed"
           
