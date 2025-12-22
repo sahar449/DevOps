@@ -238,30 +238,37 @@ jobs:
         run: |
           echo "🗑️ Deleting ArgoCD ApplicationSets..."
           kubectl delete applicationsets --all -n argocd --timeout=5m || true
-          
+
           echo "⏳ Waiting 10s..."
           sleep 10
-          
+
           echo "🗑️ Deleting ArgoCD Applications..."
           kubectl delete applications --all -n argocd --timeout=5m || true
-          
-          echo "⏳ Waiting 30s for applications cleanup..."
+
+          echo "⏳ Waiting 10s..."
+          sleep 10
+
+          echo "🗑️ Uninstalling Prometheus stack via Helm..."
+          helm uninstall prom-stack -n monitoring --wait --timeout=5m || true
+
+          echo "⏳ Waiting 30s for Prometheus cleanup..."
           sleep 30
-          
-          # ✅ NEW - Delete Ingresses first!
+
+          # ✅ Delete Ingresses first
           echo "🗑️ Deleting all Ingresses..."
           kubectl delete ingress --all --all-namespaces --timeout=5m || true
-          
+
           echo "⏳ Waiting 120s for ALB deletion..."
           sleep 120
-          
+
           echo "🗑️ Uninstalling ArgoCD via Helm..."
           helm uninstall argocd -n argocd --wait --timeout=10m || true
-          
+
           echo "⏳ Waiting 60s for LoadBalancer deletion..."
           sleep 60
 
           # ... (rest of your cleanup script)
+
           
           echo "🗑️ Cleaning up VPC resources..."
           VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=${{ env.VPC_NAME }}" --query "Vpcs[0].VpcId" --output text)
