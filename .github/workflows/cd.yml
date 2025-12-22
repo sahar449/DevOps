@@ -187,7 +187,7 @@ jobs:
           fi
           echo "============================================"
 
-      - name: Smoke Test with Monitoring
+      - name: Smoke Test and Alert Test
         run: |
           URL="https://www.saharbittman.com/health"
           
@@ -203,19 +203,11 @@ jobs:
             if [ "$HTTP_CODE" = "200" ] && (echo "$RESPONSE" | grep -q "OK"); then
               echo "✅ App is live and healthy!"
               
-              # Check monitoring
               echo ""
-              echo "📊 Verifying monitoring stack..."
-              kubectl get pod -n monitoring -l app.kubernetes.io/name=prometheus --no-headers && echo "✅ Prometheus running" || echo "⚠️  Prometheus not running"
-              kubectl get pod -n monitoring -l app.kubernetes.io/name=alertmanager --no-headers && echo "✅ AlertManager running" || echo "⚠️  AlertManager not running"
-              kubectl get prometheusrule flask-app-alerts -n monitoring --no-headers && echo "✅ Alert rule exists" || echo "⚠️  Alert rule missing"
-              
-              # Get Grafana URL
-              echo ""
-              GRAFANA_URL=$(kubectl get svc prom-stack-grafana -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
-              if [ -n "$GRAFANA_URL" ]; then
-                echo "📊 Grafana: http://$GRAFANA_URL (admin / GRAFANA_PASS)"
-              fi
+              echo "🧪 Testing alert system..."
+              kubectl scale deployment flask-app --replicas=1 -n default
+              echo "✅ Scaled to 1 replica"
+              echo "📧 Alert should fire and email sent to: saharr449@gmail.com"
               
               exit 0
             fi
