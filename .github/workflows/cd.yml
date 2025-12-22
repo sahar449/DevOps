@@ -180,7 +180,7 @@ jobs:
           fi
           echo "============================================"
 
-      - name: Smoke Test
+      - name: Smoke Test with Monitoring
         run: |
           URL="https://www.saharbittman.com/health"
           
@@ -193,18 +193,32 @@ jobs:
             
             echo "Attempt $i/60 - HTTP: $HTTP_CODE - Body: $RESPONSE"
             
-            # ✅ בדיקה תקינה: או 200 עם JSON שמכיל "OK" או plain text "OK"
             if [ "$HTTP_CODE" = "200" ] && (echo "$RESPONSE" | grep -q "OK"); then
               echo "✅ App is live and healthy!"
+              
+              # Check monitoring
+              echo ""
+              echo "📊 Verifying monitoring stack..."
+              kubectl get pod -n monitoring -l app.kubernetes.io/name=prometheus --no-headers && echo "✅ Prometheus running" || echo "⚠️  Prometheus not running"
+              kubectl get pod -n monitoring -l app.kubernetes.io/name=alertmanager --no-headers && echo "✅ AlertManager running" || echo "⚠️  AlertManager not running"
+              kubectl get prometheusrule flask-app-alerts -n monitoring --no-headers && echo "✅ Alert rule exists" || echo "⚠️  Alert rule missing"
+              
+              # Get Grafana URL
+              echo ""
+              GRAFANA_URL=$(kubectl get svc prom-stack-grafana -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+              if [ -n "$GRAFANA_URL" ]; then
+                echo "📊 Grafana: http://$GRAFANA_URL (admin / GRAFANA_PASS)"
+              fi
+              
               exit 0
             fi
             
             sleep 30
           done
           
-          echo "❌ Smoke test failed after 60 attempts (30 minutes)"
+          echo "❌ Smoke test failed after 60 attempts"
           echo "Last response: $RESPONSE"
-          exit 1  # ⭐ תיקנתי - חסר 1
+          exit 1  
         shell: bash
 
   # ============================================
