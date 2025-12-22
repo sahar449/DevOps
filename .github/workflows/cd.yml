@@ -102,7 +102,7 @@ jobs:
           --namespace monitoring \
           --create-namespace \
           --version 67.4.0 \
-          -f ArgoCD/monitoring/values.yaml \
+          -f DevOps/ArgoCD/monitoring/values.yaml \
           --set grafana.enabled=true \
           --set grafana.adminPassword="${{ secrets.GRAFANA_PASS }}" \
           --set grafana.service.type=LoadBalancer \
