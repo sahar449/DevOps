@@ -93,9 +93,12 @@ jobs:
             --query "Vpcs[0].VpcId" --output text)
           export ECR_NAME=${{ secrets.ECR_NAME }}
           export AWS_ACCOUNT_NUMBER=${{ secrets.AWS_ACCOUNT_NUMBER }}
+          export GOOGLE_SECRET_PROM=${{ secrets.GOOGLE_SECRET_PROM }}
+          export GRAFANA_PASS=${{ secrets.GRAFANA_PASS }}
           envsubst < ArgoCD/externalCharts/alb_dns.yaml | kubectl apply -f -
           envsubst < ArgoCD/externalCharts/secrets.yaml | kubectl apply -f -
           envsubst < ArgoCD/myChart/argo.yaml | kubectl apply -f -
+          envsubst < ArgoCD/monitoring/argo.yaml | kubectl apply -f -
           sleep 10
           kubectl get applications -n argocd
 
