@@ -66,41 +66,76 @@ jobs:
                   - system:masters
           EOF
 
-      - name: Install ArgoCD and Prometheus Monitoring
+      - name: Install Prometheus CRDs
         run: |
+          echo "📦 Installing Prometheus Operator CRDs..."
+          
+          CRDS=(
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_alertmanagerconfigs.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_alertmanagers.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_podmonitors.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_probes.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_prometheusagents.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_prometheuses.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_prometheusrules.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_scrapeconfigs.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_thanosrulers.yaml"
+          )
+          
+          for CRD_URL in "${CRDS[@]}"; do
+            echo "Installing $(basename $CRD_URL)..."
+            kubectl apply --server-side --force-conflicts -f "$CRD_URL"
+          done
+          
+          echo "⏳ Waiting for CRDs to be established..."
+          kubectl wait --for condition=established --timeout=60s crd/prometheuses.monitoring.coreos.com
+          kubectl wait --for condition=established --timeout=60s crd/alertmanagers.monitoring.coreos.com
+          kubectl wait --for condition=established --timeout=60s crd/prometheusrules.monitoring.coreos.com
+          echo "✅ CRDs ready"
+
+      - name: Install ArgoCD and Prometheus Monitoring using Helm
+        run: |
+          echo "🚀 Installing Prometheus Stack..."
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
           helm repo update
+          
           helm upgrade --install prom-stack prometheus-community/kube-prometheus-stack \
-          --namespace monitoring \
-          --create-namespace \
-          --version 67.4.0 \
-          --set grafana.enabled=true \
-          --set grafana.adminPassword=${{secrets.GRAFANA_PASS}} \
-          --set grafana.service.type=LoadBalancer \
-          --set grafana.service.port=80 \
-          --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-type"=classic \
-          --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
-          --set prometheus.prometheusSpec.replicas=1 \
-          --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName=gp3 \
-          --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage=50Gi
-
+            --namespace monitoring \
+            --create-namespace \
+            --version 67.4.0 \
+            --set grafana.enabled=true \
+            --set grafana.adminPassword="${{ secrets.GRAFANA_PASS }}" \
+            --set grafana.service.type=LoadBalancer \
+            --set grafana.service.port=80 \
+            --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
+            --set prometheus.prometheusSpec.retention=30d \
+            --set alertmanager.enabled=true
+          
+          echo "✅ Prometheus Stack installed"
+          
+          echo ""
+          echo "🚀 Installing ArgoCD..."
           helm repo add argo https://argoproj.github.io/argo-helm
           helm repo update
+          
           helm upgrade --install argocd argo/argo-cd \
             --namespace argocd \
             --create-namespace \
             --set server.service.type=LoadBalancer \
-            --set-string server.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-type"=classic \
+            --set-string server.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
             --set server.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-name"="${{ env.ARGOCD_CLB }}"
-
-          echo "⏳ Waiting for argocd-server rollout..."
+          
+          echo "⏳ Waiting for ArgoCD server rollout..."
           kubectl -n argocd rollout status deployment/argocd-server --timeout=5m
-
+          
           ARGOCD_LB_DNS=$(kubectl -n argocd get svc argocd-server -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
           echo "🌐 ArgoCD LoadBalancer DNS: $ARGOCD_LB_DNS"
-
+          
           ARGOCD_ADMIN_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode)
           echo "🔑 ArgoCD initial admin password: $ARGOCD_ADMIN_PASSWORD"
+          
+          echo "✅ ArgoCD installed"
 
       - name: Get VPCID, Secrets and Deploy Apps
         run: |
@@ -111,12 +146,39 @@ jobs:
           export AWS_ACCOUNT_NUMBER=${{ secrets.AWS_ACCOUNT_NUMBER }}
           export GOOGLE_SECRET_PROM=${{ secrets.GOOGLE_SECRET_PROM }}
           export GRAFANA_PASS=${{ secrets.GRAFANA_PASS }}
+          
+          echo "🚀 Deploying ArgoCD Applications..."
           envsubst < ArgoCD/externalCharts/alb_dns.yaml | kubectl apply -f -
           envsubst < ArgoCD/externalCharts/secrets.yaml | kubectl apply -f -
           envsubst < ArgoCD/myChart/argo.yaml | kubectl apply -f -
           envsubst < ArgoCD/monitoring/argo.yaml | kubectl apply -f -
-          sleep 10
+          
+          echo "⏳ Waiting for applications to sync..."
+          sleep 30
+          
+          echo ""
+          echo "📋 ArgoCD Applications Status:"
           kubectl get applications -n argocd
+          
+          echo ""
+          echo "📊 Monitoring Pods:"
+          kubectl get pods -n monitoring
+          
+          echo ""
+          echo "============================================"
+          echo "📊 GRAFANA DASHBOARD"
+          echo "============================================"
+          GRAFANA_URL=$(kubectl get svc prom-stack-grafana -n monitoring \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "Pending...")
+          
+          if [[ "$GRAFANA_URL" != "Pending..." ]]; then
+            echo "✅ URL: http://$GRAFANA_URL"
+            echo "👤 Username: admin"
+            echo "🔑 Password: (from GRAFANA_PASS secret)"
+          else
+            echo "⏳ LoadBalancer is being created..."
+          fi
+          echo "============================================"
 
       - name: Smoke Test
         run: |

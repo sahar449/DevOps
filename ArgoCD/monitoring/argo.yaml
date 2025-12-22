@@ -1,19 +1,23 @@
 ---
+# Application 1: Prometheus Stack (Adopts Helm release)
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: prometheus-stack-chart
+  name: prometheus-stack
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   project: default
+  
   source:
     chart: kube-prometheus-stack
     repoURL: https://prometheus-community.github.io/helm-charts
     targetRevision: 67.4.0
     helm:
+      releaseName: prom-stack  
+      skipCrds: true           
       values: |
-        crds:
-          create: false
         grafana:
           enabled: true
           adminPassword: ${GRAFANA_PASS}
@@ -21,55 +25,44 @@ spec:
             type: LoadBalancer
             port: 80
             annotations:
-              service.beta.kubernetes.io/aws-load-balancer-type: classic
               service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+        
         prometheus:
           prometheusSpec:
             retention: 30d
-            storageSpec:
-              volumeClaimTemplate:
-                spec:
-                  storageClassName: gp3
-                  accessModes:
-                    - ReadWriteOnce
-                  resources:
-                    requests:
-                      storage: 50Gi
-            resources:
-              requests:
-                cpu: 500m
-                memory: 2Gi
+        
         alertmanager:
           enabled: true
-          alertmanagerSpec:
-            resources:
-              requests:
-                cpu: 200m
-                memory: 512Mi
+  
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
+  
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
     retry:
-      limit: 5
+      limit: 3
       backoff:
         duration: 5s
-        factor: 2
-        maxDuration: 3m
+        maxDuration: 1m
+
 ---
+# Application 2: Custom Monitoring Config
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: prometheus-custom-config
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   project: default
+  
   source:
     repoURL: https://github.com/sahar449/DevOps.git
     targetRevision: HEAD
@@ -78,19 +71,19 @@ spec:
       parameters:
         - name: alertmanager.password
           value: "${GOOGLE_SECRET_PROM}"
+  
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
+  
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - ServerSideApply=true
     retry:
-      limit: 5
+      limit: 3
       backoff:
         duration: 5s
-        factor: 2
-        maxDuration: 3m
+        maxDuration: 1m
