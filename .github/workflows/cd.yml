@@ -23,8 +23,6 @@ env:
   AWS_REGION: us-west-2
   CLUSTER_NAME: eksdemo-cluster
   VPC_NAME: eksdemo-vpc
-  ARGOCD_CLB: eksdemo-argocd-clb
-  FLASK_ALB: eksdemo-flask-alb
 
 jobs:
   # ============================================
@@ -109,7 +107,7 @@ jobs:
           --set grafana.service.type=LoadBalancer \
           --set grafana.service.port=80 \
           --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
-          --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-name"="${{ env.GRAFANA_CLB }}" \
+          --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-name"="grafana" \
           --set prometheus.prometheusSpec.retention=30d \
           --set alertmanager.enabled=true \
           --set grafana.datasources."datasources\.yaml".apiVersion=1 \
@@ -132,7 +130,7 @@ jobs:
             --create-namespace \
             --set server.service.type=LoadBalancer \
             --set-string server.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
-            --set server.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-name"="${{ env.ARGOCD_CLB }}"
+            --set server.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-name"="argocd"
           
           echo "⏳ Waiting for ArgoCD server rollout..."
           kubectl -n argocd rollout status deployment/argocd-server --timeout=5m
