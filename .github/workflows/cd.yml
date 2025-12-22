@@ -68,6 +68,8 @@ jobs:
 
       - name: Install ArgoCD and Prometheus Monitoring
         run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
           helm upgrade --install prom prometheus-community/kube-prometheus-stack \
           --namespace monitoring \
           --create-namespace \
@@ -78,6 +80,7 @@ jobs:
           --set grafana.service.port=80 \
           --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-type"=classic \
           --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing
+          helm repo add argo https://argoproj.github.io/argo-helm
           helm repo update
           helm upgrade --install argocd argo/argo-cd \
             --namespace argocd \
