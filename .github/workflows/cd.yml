@@ -112,7 +112,7 @@ jobs:
           --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-name"="${{ env.GRAFANA_CLB }}" \
           --set prometheus.prometheusSpec.retention=30d \
           --set alertmanager.enabled=true \
-          --set-string grafana.datasources."datasources\.yaml".apiVersion=1 \
+          --set grafana.datasources."datasources\.yaml".apiVersion=1 \
           --set-string grafana.datasources."datasources\.yaml".datasources[0].name=Prometheus \
           --set-string grafana.datasources."datasources\.yaml".datasources[0].type=prometheus \
           --set-string grafana.datasources."datasources\.yaml".datasources[0].url="http://prom-stack-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090" \
