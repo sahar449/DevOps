@@ -42,6 +42,11 @@ spec:
 
         alertmanager:
           enabled: true
+          alertmanagerSpec:
+            resources:
+              requests:
+                cpu: 200m
+                memory: 512Mi
 
   destination:
     server: https://kubernetes.default.svc
