@@ -1,5 +1,4 @@
 alertmanager:
-  password: "YOUR_PASSWORD_HERE"
   enabled: true
   alertmanagerSpec:
     config:
@@ -9,7 +8,6 @@ alertmanager:
         smtp_auth_username: 'saharr449@gmail.com'
         smtp_auth_password: ''
         smtp_require_tls: true
-
       route:
         receiver: 'null'
         group_by: ['alertname']

@@ -102,9 +102,9 @@ jobs:
           --namespace monitoring \
           --create-namespace \
           --version 67.4.0 \
-          -f DevOps/ArgoCD/monitoring/values.yaml \
+          -f ArgoCD/monitoring/values.yaml \
           --set grafana.enabled=true \
-          --set grafana.adminPassword="${{ secrets.GRAFANA_PASS }}" \
+          --set alertmanager.alertmanagerSpec.config.global.smtp_auth_password="${{ secrets.GOOGLE_SECRET_PROM }}"
           --set grafana.service.type=LoadBalancer \
           --set grafana.service.port=80 \
           --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
