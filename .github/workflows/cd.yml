@@ -23,8 +23,6 @@ env:
   AWS_REGION: us-west-2
   CLUSTER_NAME: eksdemo-cluster
   VPC_NAME: eksdemo-vpc
-  ARGOCD_CLB: eksdemo-argocd-clb
-  FLASK_ALB: eksdemo-flask-alb
 
 jobs:
   # ============================================
@@ -91,41 +89,120 @@ jobs:
     
       - name: Install ArgoCD
         run: |
+          echo "📦 Installing Prometheus Operator CRDs..."
+          
+          CRDS=(
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_alertmanagerconfigs.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_alertmanagers.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_podmonitors.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_probes.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_prometheusagents.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_prometheuses.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_prometheusrules.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_scrapeconfigs.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml"
+            "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_thanosrulers.yaml"
+          )
+          
+          for CRD_URL in "${CRDS[@]}"; do
+            echo "Installing $(basename $CRD_URL)..."
+            kubectl apply --server-side --force-conflicts -f "$CRD_URL"
+          done
+          
+          echo "⏳ Waiting for CRDs to be established..."
+          kubectl wait --for condition=established --timeout=60s crd/prometheuses.monitoring.coreos.com
+          kubectl wait --for condition=established --timeout=60s crd/alertmanagers.monitoring.coreos.com
+          kubectl wait --for condition=established --timeout=60s crd/prometheusrules.monitoring.coreos.com
+          echo "✅ CRDs ready"
+
+      - name: Install ArgoCD and Prometheus Monitoring using Helm
+        run: |
+          echo "🚀 Installing Prometheus Stack..."
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+          
+          helm upgrade --install prom-stack prometheus-community/kube-prometheus-stack \
+          --namespace monitoring \
+          --create-namespace \
+          --version 67.4.0 \
+          --set grafana.enabled=true \
+          --set grafana.adminPassword="${{ secrets.GRAFANA_PASS }}" \
+          --set alertmanager.config.global.smtp_auth_password="${{ secrets.GOOGLE_SECRET_PROM }}" \
+          --set grafana.service.type=LoadBalancer \
+          --set grafana.service.port=80 \
+          --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
+          --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-name"="${{ env.GRAFANA_CLB }}" \
+          --set prometheus.prometheusSpec.retention=30d
+
+          echo "✅ Prometheus Stack installed"
+          
+          echo ""
+          echo "🚀 Installing ArgoCD..."
           helm repo add argo https://argoproj.github.io/argo-helm
           helm repo update
+          
           helm upgrade --install argocd argo/argo-cd \
             --namespace argocd \
             --create-namespace \
             --set server.service.type=LoadBalancer \
-            --set-string server.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-type"=classic \
-            --set server.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-name"="${{ env.ARGOCD_CLB }}"
-
-          echo "⏳ Waiting for argocd-server rollout..."
+            --set-string server.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
+            --set server.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-name"="argocd"
+          
+          echo "⏳ Waiting for ArgoCD server rollout..."
           kubectl -n argocd rollout status deployment/argocd-server --timeout=5m
-
+          
           ARGOCD_LB_DNS=$(kubectl -n argocd get svc argocd-server -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
           echo "🌐 ArgoCD LoadBalancer DNS: $ARGOCD_LB_DNS"
-
+          
           ARGOCD_ADMIN_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode)
           echo "🔑 ArgoCD initial admin password: $ARGOCD_ADMIN_PASSWORD"
+          
+          echo "✅ ArgoCD installed"
 
       - name: Get VPCID, Secrets and Deploy Apps
         run: |
           export VPC_ID=$(aws ec2 describe-vpcs \
-            --filters "Name=tag:Name,Values=${{ env.VPC_NAME }}" \
-            --query "Vpcs[0].VpcId" --output text)
+          --filters "Name=tag:Name,Values=${{ env.VPC_NAME }}" \
+          --query "Vpcs[0].VpcId" --output text)
           export ECR_NAME=${{ secrets.ECR_NAME }}
           export AWS_ACCOUNT_NUMBER=${{ secrets.AWS_ACCOUNT_NUMBER }}
           export GOOGLE_SECRET_PROM=${{ secrets.GOOGLE_SECRET_PROM }}
           export GRAFANA_PASS=${{ secrets.GRAFANA_PASS }}
+          
+          echo "🚀 Deploying ArgoCD Applications..."
           envsubst < ArgoCD/externalCharts/alb_dns.yaml | kubectl apply -f -
           envsubst < ArgoCD/externalCharts/secrets.yaml | kubectl apply -f -
           envsubst < ArgoCD/myChart/argo.yaml | kubectl apply -f -
           envsubst < ArgoCD/monitoring/argo.yaml | kubectl apply -f -
-          sleep 10
+                      
+          echo "⏳ Waiting for applications to sync..."
+          sleep 30
+          
+          echo ""
+          echo "📋 ArgoCD Applications Status:"
           kubectl get applications -n argocd
+          
+          echo ""
+          echo "📊 Monitoring Pods:"
+          kubectl get pods -n monitoring
+          
+          echo ""
+          echo "============================================"
+          echo "📊 GRAFANA DASHBOARD"
+          echo "============================================"
+          GRAFANA_URL=$(kubectl get svc prom-stack-grafana -n monitoring \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "Pending...")
+          
+          if [[ "$GRAFANA_URL" != "Pending..." ]]; then
+            echo "✅ URL: http://$GRAFANA_URL"
+            echo "👤 Username: admin"
+            echo "🔑 Password: (from GRAFANA_PASS secret)"
+          else
+            echo "⏳ LoadBalancer is being created..."
+          fi
+          echo "============================================"
 
-      - name: Smoke Test
+      - name: Smoke Test and Alert Test
         run: |
           URL="https://www.saharbittman.com/health"
           
@@ -138,18 +215,24 @@ jobs:
             
             echo "Attempt $i/60 - HTTP: $HTTP_CODE - Body: $RESPONSE"
             
-            # ✅ בדיקה תקינה: או 200 עם JSON שמכיל "OK" או plain text "OK"
             if [ "$HTTP_CODE" = "200" ] && (echo "$RESPONSE" | grep -q "OK"); then
               echo "✅ App is live and healthy!"
+              
+              echo ""
+              echo "🧪 Testing alert system..."
+              kubectl scale deployment flask-app --replicas=1 -n default
+              echo "✅ Scaled to 1 replica"
+              echo "📧 Alert should fire and email sent to: saharr449@gmail.com"
+              
               exit 0
             fi
             
             sleep 30
           done
           
-          echo "❌ Smoke test failed after 60 attempts (30 minutes)"
+          echo "❌ Smoke test failed after 60 attempts"
           echo "Last response: $RESPONSE"
-          exit 1  # ⭐ תיקנתי - חסר 1
+          exit 1  
         shell: bash
 
   # ============================================
@@ -177,30 +260,37 @@ jobs:
         run: |
           echo "🗑️ Deleting ArgoCD ApplicationSets..."
           kubectl delete applicationsets --all -n argocd --timeout=5m || true
-          
+
           echo "⏳ Waiting 10s..."
           sleep 10
-          
+
           echo "🗑️ Deleting ArgoCD Applications..."
           kubectl delete applications --all -n argocd --timeout=5m || true
-          
-          echo "⏳ Waiting 30s for applications cleanup..."
+
+          echo "⏳ Waiting 10s..."
+          sleep 10
+
+          echo "🗑️ Uninstalling Prometheus stack via Helm..."
+          helm uninstall prom-stack -n monitoring --wait --timeout=5m || true
+
+          echo "⏳ Waiting 30s for Prometheus cleanup..."
           sleep 30
-          
-          # ✅ NEW - Delete Ingresses first!
+
+          # ✅ Delete Ingresses first
           echo "🗑️ Deleting all Ingresses..."
           kubectl delete ingress --all --all-namespaces --timeout=5m || true
-          
+
           echo "⏳ Waiting 120s for ALB deletion..."
           sleep 120
-          
+
           echo "🗑️ Uninstalling ArgoCD via Helm..."
           helm uninstall argocd -n argocd --wait --timeout=10m || true
-          
+
           echo "⏳ Waiting 60s for LoadBalancer deletion..."
           sleep 60
 
           # ... (rest of your cleanup script)
+
           
           echo "🗑️ Cleaning up VPC resources..."
           VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=${{ env.VPC_NAME }}" --query "Vpcs[0].VpcId" --output text)

@@ -4,15 +4,12 @@ metadata:
   name: flask-app-alerts
   namespace: monitoring
   labels:
-    release: prometheus-stack
-  annotations:
-    argocd.argoproj.io/sync-wave: "2"
+    release: prom-stack
 spec:
   groups:
     - name: flask-app-alerts
       interval: 5s
       rules:
-        # Alert: Flask App Pod Down
         - alert: FlaskAppPodDown
           expr: kube_deployment_status_replicas_available{namespace="default", deployment="flask-app"} < 2
           for: 10s
@@ -20,4 +17,4 @@ spec:
             severity: critical
           annotations:
             summary: "Flask App Pod Down!"
-            description: "Flask App has only {{`{{ $value }}`}} pods running (expected 2)"
+            description: "Flask App has less than 2 pods running"

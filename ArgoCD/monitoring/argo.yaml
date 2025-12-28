@@ -1,10 +1,12 @@
+---
+# Application 1: Prometheus Stack (Adopts Helm release)
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: prometheus-stack
   namespace: argocd
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   project: default
   
@@ -51,8 +53,40 @@ spec:
       - ServerSideApply=true 
       - Replace=false
     retry:
-      limit: 5
+      limit: 3
       backoff:
         duration: 5s
-        factor: 2
-        maxDuration: 3m
+        maxDuration: 1m
+
+---
+# Application 2: Custom Monitoring Config
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus-custom-config
+  namespace: argocd
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/sahar449/DevOps.git
+    targetRevision: HEAD
+    path: ArgoCD/monitoring
+    helm:
+      parameters:
+        - name: alertmanager.password
+          value: "${GOOGLE_SECRET_PROM}"
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        maxDuration: 1m
