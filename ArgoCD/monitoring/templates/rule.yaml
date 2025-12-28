@@ -8,13 +8,13 @@ metadata:
 spec:
   groups:
     - name: flask-app-alerts
-      interval: 5s
+      interval: 30s
       rules:
         - alert: FlaskAppPodDown
-          expr: kube_deployment_status_replicas_available{namespace="default", deployment="flask-app"} < 2
-          for: 10s
+          expr: kube_deployment_status_replicas_available{namespace="default", deployment="flask-app"} < 1
+          for: 1m
           labels:
             severity: critical
           annotations:
             summary: "Flask App Pod Down!"
-            description: "Flask App has less than 2 pods running"
+            description: "Flask App has {{ $value }} pods running (expected: 1+)"

@@ -2,7 +2,7 @@ namespace: monitoring
 
 grafana:
   enabled: true
-  adminPassword: 
+  adminPassword: "${GRAFANA_PASS}"
   service:
     type: LoadBalancer
     port: 80
@@ -30,10 +30,18 @@ prometheusOperator:
   admissionWebhooks:
     enabled: false
 
+defaultRules:
+  create: true
+  rules:
+    kubeScheduler: false
+    kubeControllerManager: false
+    kubeProxy: false
+    etcd: false
+
 customAlertmanager:
   smtpSmarthost: smtp.gmail.com:587
   smtpFrom: saharr449@gmail.com
   smtpUsername: saharr449@gmail.com
-  smtpPassword: '${GOOGLE_SECRET_PROM}'
+  smtpPassword: 
   smtpRequireTLS: true
   emailTo: saharr449@gmail.com
