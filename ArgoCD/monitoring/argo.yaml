@@ -9,7 +9,6 @@ spec:
   project: default
   
   sources:
-    # Source 1: Prometheus Helm Chart
     - chart: kube-prometheus-stack
       repoURL: https://prometheus-community.github.io/helm-charts
       targetRevision: 67.4.0
@@ -40,7 +39,6 @@ spec:
             alertmanagerSpec:
               replicas: 1
     
-    # Source 2: Custom Configs
     - repoURL: https://github.com/sahar449/DevOps.git
       targetRevision: HEAD
       path: ArgoCD/monitoring/templates
@@ -59,8 +57,19 @@ spec:
       - CreateNamespace=true
       - ServerSideApply=true
       - Replace=true
+      - RespectIgnoreDifferences=true
     retry:
-      limit: 3
+      limit: 5
       backoff:
-        duration: 5s
-        maxDuration: 1m
+        duration: 10s
+        maxDuration: 3m
+  
+  ignoreDifferences:
+  - group: admissionregistration.k8s.io
+    kind: ValidatingWebhookConfiguration
+    jqPathExpressions:
+    - .webhooks[].clientConfig.caBundle
+  - group: admissionregistration.k8s.io
+    kind: MutatingWebhookConfiguration
+    jqPathExpressions:
+    - .webhooks[].clientConfig.caBundle
