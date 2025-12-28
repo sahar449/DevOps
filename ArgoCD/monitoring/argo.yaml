@@ -38,6 +38,7 @@ spec:
               type: ClusterIP
             alertmanagerSpec:
               replicas: 1
+              configSecret: alertmanager-custom-config
           
           prometheusOperator:
             admissionWebhooks:
