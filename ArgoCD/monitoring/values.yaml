@@ -2,7 +2,7 @@ namespace: monitoring
 
 grafana:
   enabled: true
-  adminPassword: "${GRAFANA_PASS}"
+  adminPassword: 
   service:
     type: LoadBalancer
     port: 80

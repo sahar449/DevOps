@@ -13,8 +13,16 @@ spec:
     targetRevision: HEAD
     path: ArgoCD/monitoring
     helm:
-      valueFiles:
-        - values.yaml
+      values: |
+        namespace: monitoring
+        
+        customAlertmanager:
+          smtpSmarthost: smtp.gmail.com:587
+          smtpFrom: saharr449@gmail.com
+          smtpUsername: saharr449@gmail.com
+          smtpPassword: '${GOOGLE_SECRET_PROM}'
+          smtpRequireTLS: true
+          emailTo: saharr449@gmail.com
   
   destination:
     server: https://kubernetes.default.svc
