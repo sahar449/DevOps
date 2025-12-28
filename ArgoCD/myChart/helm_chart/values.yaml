@@ -11,6 +11,7 @@ service:
   type: ClusterIP
   port: 5000
   targetPort: 5000
+
 ingress:
   enabled: true
   className: alb
@@ -38,6 +39,7 @@ ingress:
   tls:
     - hosts:
         - '*.saharbittman.com'
+
 resources:
   requests:
     memory: 128Mi
@@ -45,6 +47,7 @@ resources:
   limits:
     memory: 256Mi
     cpu: 200m
+
 livenessProbe:
   httpGet:
     path: /health
@@ -53,6 +56,7 @@ livenessProbe:
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 3
+
 readinessProbe:
   httpGet:
     path: /health
@@ -68,3 +72,14 @@ secrets:
   providerClassName: rds-secret-provider
   mountPath: /mnt/rds-secret
   accountNumber: null
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false

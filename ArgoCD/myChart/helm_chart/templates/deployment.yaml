@@ -15,7 +15,12 @@ spec:
       labels:
         app: {{ .Values.app.name }}
     spec:
-      serviceAccountName: {{ .Values.secrets.serviceAccountName }} 
+      serviceAccountName: {{ .Values.secrets.serviceAccountName }}
+      securityContext:
+        runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
+        runAsUser: {{ .Values.securityContext.runAsUser }}
+        runAsGroup: {{ .Values.securityContext.runAsGroup }}
+        fsGroup: {{ .Values.securityContext.fsGroup }}
       containers:
       - name: {{ .Values.app.name }}
         image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
@@ -23,6 +28,12 @@ spec:
         ports:
         - containerPort: {{ .Values.service.targetPort }}
           name: http
+        securityContext:
+          allowPrivilegeEscalation: {{ .Values.securityContext.allowPrivilegeEscalation }}
+          capabilities:
+            drop:
+              {{- toYaml .Values.securityContext.capabilities.drop | nindent 14 }}
+          readOnlyRootFilesystem: {{ .Values.securityContext.readOnlyRootFilesystem }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
         livenessProbe:
