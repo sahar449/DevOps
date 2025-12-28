@@ -38,6 +38,10 @@ spec:
               type: ClusterIP
             alertmanagerSpec:
               replicas: 1
+          
+          prometheusOperator:
+            admissionWebhooks:
+              enabled: false
     
     - repoURL: https://github.com/sahar449/DevOps.git
       targetRevision: HEAD
@@ -57,19 +61,8 @@ spec:
       - CreateNamespace=true
       - ServerSideApply=true
       - Replace=true
-      - RespectIgnoreDifferences=true
     retry:
       limit: 5
       backoff:
         duration: 10s
         maxDuration: 3m
-  
-  ignoreDifferences:
-  - group: admissionregistration.k8s.io
-    kind: ValidatingWebhookConfiguration
-    jqPathExpressions:
-    - .webhooks[].clientConfig.caBundle
-  - group: admissionregistration.k8s.io
-    kind: MutatingWebhookConfiguration
-    jqPathExpressions:
-    - .webhooks[].clientConfig.caBundle
