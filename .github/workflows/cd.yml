@@ -63,8 +63,31 @@ jobs:
                 groups:
                   - system:masters
           EOF
+      
+      - name: Install Prometheus Operator CRDs
+        run: |
+          echo "📦 Installing Prometheus Operator CRDs..."
 
-      - name: Install Prometheus CRDs
+          kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_alertmanagerconfigs.yaml
+          kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_alertmanagers.yaml
+          kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_podmonitors.yaml
+          kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_probes.yaml
+          kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_prometheuses.yaml
+          kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_prometheusrules.yaml
+          kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_scrapeconfigs.yaml
+          kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
+          kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.77.2/example/prometheus-operator-crd/monitoring.coreos.com_thanosrulers.yaml
+
+          echo "⏳ Waiting for CRDs to be established..."
+
+          kubectl wait --for=condition=established crd/prometheuses.monitoring.coreos.com --timeout=120s
+          kubectl wait --for=condition=established crd/alertmanagers.monitoring.coreos.com --timeout=120s
+          kubectl wait --for=condition=established crd/prometheusrules.monitoring.coreos.com --timeout=120s
+
+          echo "✅ Prometheus CRDs are ready"
+          
+    
+      - name: Install ArgoCD
         run: |
           echo "📦 Installing Prometheus Operator CRDs..."
           

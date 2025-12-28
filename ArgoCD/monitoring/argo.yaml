@@ -10,29 +10,35 @@ metadata:
 spec:
   project: default
   
-  source:
-    chart: kube-prometheus-stack
-    repoURL: https://prometheus-community.github.io/helm-charts
-    targetRevision: 67.4.0
-    helm:
-      releaseName: prom-stack  
-      skipCrds: true           
-      values: |
-        grafana:
-          enabled: true
-          adminPassword: ${GRAFANA_PASS}
-          service:
-            type: LoadBalancer
-            port: 80
-            annotations:
-              service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
-        
-        prometheus:
-          prometheusSpec:
-            retention: 30d
-        
-        alertmanager:
-          enabled: true
+  sources:
+    - chart: kube-prometheus-stack
+      repoURL: https://prometheus-community.github.io/helm-charts
+      targetRevision: 67.4.0
+      helm:
+        values: |
+          grafana:
+            enabled: true
+            adminPassword: "${GRAFANA_PASS}"
+            service:
+              type: LoadBalancer
+              port: 80
+              annotations:
+                service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+          
+          prometheus:
+            prometheusSpec:
+              retention: 30d
+          
+          alertmanager:
+            enabled: true
+    
+    - repoURL: https://github.com/sahar449/DevOps.git
+      targetRevision: HEAD
+      path: ArgoCD/monitoring
+      helm:
+        parameters:
+          - name: alertmanager.password
+            value: "${GOOGLE_SECRET_PROM}"
   
   destination:
     server: https://kubernetes.default.svc
@@ -44,7 +50,8 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - RespectIgnoreDifferences=true
+      - ServerSideApply=true 
+      - Replace=false
     retry:
       limit: 3
       backoff:
