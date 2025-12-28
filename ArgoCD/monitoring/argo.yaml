@@ -1,3 +1,4 @@
+---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -25,16 +26,23 @@ spec:
                 service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
           
           prometheus:
+            service:
+              type: ClusterIP
             prometheusSpec:
+              replicas: 1
               retention: 30d
           
           alertmanager:
             enabled: true
+            service:
+              type: ClusterIP
+            alertmanagerSpec:
+              replicas: 1
     
-    # Source 2: Custom Configs 
+    # Source 2: Custom Configs
     - repoURL: https://github.com/sahar449/DevOps.git
       targetRevision: HEAD
-      path: ArgoCD/monitoring/templates
+      path: ArgoCD/monitoring/manifests
       directory:
         recurse: false
   
