@@ -17,4 +17,4 @@ spec:
             severity: critical
           annotations:
             summary: "Flask App Pod Down!"
-            description: "Flask App has {{ $value }} pods running (expected: 1+)"
+            description: "Flask App deployment has no available pods"
