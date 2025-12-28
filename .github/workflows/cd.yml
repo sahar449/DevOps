@@ -66,24 +66,24 @@ jobs:
 
       - name: Install ArgoCD and Prometheus Monitoring using Helm
         run: |
-          echo "🚀 Installing Prometheus Stack..."
-          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-          helm repo update
+          # echo "🚀 Installing Prometheus Stack..."
+          # helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          # helm repo update
           
-          helm upgrade --install prom-stack prometheus-community/kube-prometheus-stack \
-          --namespace monitoring \
-          --create-namespace \
-          --version 67.4.0 \
-          --set grafana.enabled=true \
-          --set grafana.adminPassword="${{ secrets.GRAFANA_PASS }}" \
-          --set alertmanager.config.global.smtp_auth_password="${{ secrets.GOOGLE_SECRET_PROM }}" \
-          --set grafana.service.type=LoadBalancer \
-          --set grafana.service.port=80 \
-          --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
-          --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-name"="${{ env.GRAFANA_CLB }}" \
-          --set prometheus.prometheusSpec.retention=30d
+          # helm upgrade --install prom-stack prometheus-community/kube-prometheus-stack \
+          # --namespace monitoring \
+          # --create-namespace \
+          # --version 67.4.0 \
+          # --set grafana.enabled=true \
+          # --set grafana.adminPassword="${{ secrets.GRAFANA_PASS }}" \
+          # --set alertmanager.config.global.smtp_auth_password="${{ secrets.GOOGLE_SECRET_PROM }}" \
+          # --set grafana.service.type=LoadBalancer \
+          # --set grafana.service.port=80 \
+          # --set-string grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
+          # --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-name"="${{ env.GRAFANA_CLB }}" \
+          # --set prometheus.prometheusSpec.retention=30d
 
-          echo "✅ Prometheus Stack installed"
+          # echo "✅ Prometheus Stack installed"
           
           echo ""
           echo "🚀 Installing ArgoCD..."
