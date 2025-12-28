@@ -43,7 +43,7 @@ spec:
     # Source 2: Custom Configs
     - repoURL: https://github.com/sahar449/DevOps.git
       targetRevision: HEAD
-      path: ArgoCD/monitoring/manifests
+      path: ArgoCD/monitoring/templates
       directory:
         recurse: false
   
