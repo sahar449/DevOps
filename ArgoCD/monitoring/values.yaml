@@ -1,4 +1,5 @@
-secret:
+namespace: monitoring
+
 grafana:
   enabled: true
   adminPassword: "${GRAFANA_PASS}"
@@ -23,48 +24,16 @@ alertmanager:
     type: ClusterIP
   alertmanagerSpec:
     replicas: 1
-  config:
-    global:
-      resolve_timeout: 5m
-      smtp_smarthost: 'smtp.gmail.com:587'
-      smtp_from: 'saharr449@gmail.com'
-      smtp_auth_username: 'saharr449@gmail.com'
-      smtp_auth_password: '${GOOGLE_SECRET_PROM}'
-      smtp_require_tls: true
-    
-    route:
-      receiver: 'email'
-      group_by: ['alertname']
-      group_wait: 10s
-      group_interval: 10s
-      repeat_interval: 12h
-      routes:
-        - receiver: 'email'
-          matchers:
-            - alertname = FlaskAppPodDown
-          group_wait: 5s
-          group_interval: 10s
-          repeat_interval: 1h
-        - receiver: 'null'
-          matchers:
-            - alertname = Watchdog
-    
-    receivers:
-      - name: 'email'
-        email_configs:
-          - to: 'saharr449@gmail.com'
-            send_resolved: true
-            headers:
-              Subject: '🚨 Alert: {{ .GroupLabels.alertname }}'
-            html: |
-              <h2>{{ .Status | upper }}</h2>
-              {{ range .Alerts }}
-              <p><b>Alert:</b> {{ .Labels.alertname }}</p>
-              <p><b>Severity:</b> {{ .Labels.severity }}</p>
-              <p><b>Description:</b> {{ .Annotations.description }}</p>
-              {{ end }}
-      - name: 'null'
+    configSecret: alertmanager-custom-config
 
 prometheusOperator:
   admissionWebhooks:
     enabled: false
+
+customAlertmanager:
+  smtpSmarthost: smtp.gmail.com:587
+  smtpFrom: saharr449@gmail.com
+  smtpUsername: saharr449@gmail.com
+  smtpPassword: '${GOOGLE_SECRET_PROM}'
+  smtpRequireTLS: true
+  emailTo: saharr449@gmail.com

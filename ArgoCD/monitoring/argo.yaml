@@ -26,11 +26,6 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-    retry:
-      limit: 3
-      backoff:
-        duration: 5s
-        maxDuration: 1m
 
 ---
 apiVersion: argoproj.io/v1alpha1
@@ -91,8 +86,3 @@ spec:
       - CreateNamespace=true
       - ServerSideApply=true
       - Replace=true
-    retry:
-      limit: 5
-      backoff:
-        duration: 10s
-        maxDuration: 3m
