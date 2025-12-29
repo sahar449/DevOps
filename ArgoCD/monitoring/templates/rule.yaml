@@ -4,7 +4,7 @@ metadata:
   name: flask-app-alerts
   namespace: monitoring
   labels:
-    release: prom-stack
+    release: prometheus-stack
 spec:
   groups:
     - name: flask-app-alerts
