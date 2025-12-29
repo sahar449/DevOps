@@ -42,6 +42,6 @@ customAlertmanager:
   smtpSmarthost: smtp.gmail.com:587
   smtpFrom: saharr449@gmail.com
   smtpUsername: saharr449@gmail.com
-  smtpPassword: 
+  smtpPassword: '${GOOGLE_SECRET_PROM}'
   smtpRequireTLS: true
   emailTo: saharr449@gmail.com

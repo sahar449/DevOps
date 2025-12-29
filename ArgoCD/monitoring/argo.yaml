@@ -20,7 +20,7 @@ spec:
           smtpSmarthost: smtp.gmail.com:587
           smtpFrom: saharr449@gmail.com
           smtpUsername: saharr449@gmail.com
-          smtpPassword: '${GOOGLE_SECRET_PROM}'
+          smtpPassword: ${GOOGLE_SECRET_PROM}
           smtpRequireTLS: true
           emailTo: saharr449@gmail.com
   
@@ -79,8 +79,25 @@ spec:
             configSecret: alertmanager-custom-config
         
         prometheusOperator:
+          enabled: true
           admissionWebhooks:
             enabled: false
+            patch:
+              enabled: false
+            certManager:
+              enabled: false
+          tls:
+            enabled: false
+          tlsProxy:
+            enabled: false
+        
+        defaultRules:
+          create: true
+          rules:
+            kubeScheduler: false
+            kubeControllerManager: false
+            kubeProxy: false
+            etcd: false
   
   destination:
     server: https://kubernetes.default.svc
