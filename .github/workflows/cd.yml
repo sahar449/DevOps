@@ -120,9 +120,9 @@ jobs:
           echo "============================================"
           echo "📊 GRAFANA DASHBOARD"
           echo "============================================"
-          GRAFANA_URL=$(kubectl get svc prom-stack-grafana -n monitoring \
+          GRAFANA_URL=$(kubectl get svc prometheus-stack-grafana -n monitoring \
             -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "Pending...")
-          
+
           if [[ "$GRAFANA_URL" != "Pending..." ]]; then
             echo "✅ URL: http://$GRAFANA_URL"
             echo "👤 Username: admin"
