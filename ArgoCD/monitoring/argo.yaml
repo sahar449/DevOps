@@ -53,16 +53,22 @@ spec:
     helm:
       values: |
         grafana:
+        enabled: true
+        adminPassword: "${GRAFANA_PASS}"
+        service:
+          type: ClusterIP
+        
+        ingress:
           enabled: true
-          adminPassword: "${GRAFANA_PASS}"
-          service:
-            type: LoadBalancer
-            port: 80
-            annotations:
-              service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
-              service.beta.kubernetes.io/aws-load-balancer-name: grafana-clb
-              service.beta.kubernetes.io/aws-load-balancer-type: "classic"
-              argocd.argoproj.io/sync-options: Replace=true
+          ingressClassName: alb
+          annotations:
+            alb.ingress.kubernetes.io/scheme: internet-facing
+            alb.ingress.kubernetes.io/target-type: ip
+            alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+          hosts:
+            - grafana.saharbittman.com
+          path: /
+          pathType: Prefix
         
         prometheus:
           service:
