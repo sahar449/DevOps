@@ -61,7 +61,7 @@ spec:
             annotations:
               service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
               service.beta.kubernetes.io/aws-load-balancer-name: grafana-clb
-              service.beta.kubernetes.io/aws-load-balancer-type: classic
+              service.beta.kubernetes.io/aws-load-balancer-type: "classic"
               argocd.argoproj.io/sync-options: Replace=true
         
         prometheus:
