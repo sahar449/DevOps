@@ -76,7 +76,7 @@ resource "aws_secretsmanager_secret_version" "rds_credentials_version" {
 resource "aws_db_instance" "mysql" {
   identifier           = "mydb"
   engine               = "mysql"
-  engine_version       = "8.0.39"
+  engine_version       = "8.0.44"
   instance_class       = "db.t3.micro"
   allocated_storage    = 20
   
