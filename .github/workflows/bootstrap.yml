@@ -14,8 +14,8 @@ on:
 
 permissions:
   id-token: write
-  contents: read
-  security-events: write
+  # contents: read
+  # security-events: write
 
 env:
   aws_region: us-west-2
